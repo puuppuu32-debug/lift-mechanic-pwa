@@ -588,18 +588,67 @@ function closeModals() {
     });
 }
 
-// PWA функциональность
+// PWA функциональность с оффлайн-режимом
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', function() {
-        navigator.serviceWorker.register('./sw.js')
+        navigator.serviceWorker.register('/sw.js')
             .then(function(registration) {
-                console.log('ServiceWorker зарегистрирован успешно');
+                console.log('ServiceWorker зарегистрирован успешно: ', registration.scope);
+                
+                // Проверка обновлений
+                registration.addEventListener('updatefound', () => {
+                    const newWorker = registration.installing;
+                    console.log('Обнаружена новая версия Service Worker');
+                    newWorker.addEventListener('statechange', () => {
+                        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                            showNotification('Доступно обновление приложения. Перезагрузите страницу.');
+                        }
+                    });
+                });
             })
             .catch(function(error) {
-                console.log('Ошибка регистрации ServiceWorker:', error);
+                console.log('Ошибка регистрации ServiceWorker: ', error);
             });
+
+        // Слушатель изменения онлайн-статуса
+        window.addEventListener('online', function() {
+            console.log('Соединение восстановлено');
+            showNotification('✅ Соединение восстановлено');
+            // При восстановлении соединения можно синхронизировать данные
+            if (currentUser) {
+                loadUserDocuments();
+            }
+            updateOnlineStatus(true);
+        });
+
+        window.addEventListener('offline', function() {
+            console.log('Режим оффлайн');
+            showNotification('🔌 Режим оффлайн - используются кэшированные данные');
+            updateOnlineStatus(false);
+        });
     });
 }
+
+// Функция для обновления отображения онлайн-статуса
+function updateOnlineStatus(isOnline) {
+    const statusElement = document.getElementById('syncStatus');
+    if (statusElement) {
+        if (isOnline) {
+            statusElement.innerHTML = '🟢 Онлайн';
+            statusElement.style.background = '#d4edda';
+            statusElement.style.color = '#155724';
+        } else {
+            statusElement.innerHTML = '🔴 Оффлайн';
+            statusElement.style.background = '#f8d7da';
+            statusElement.style.color = '#721c24';
+        }
+    }
+}
+
+// Проверяем статус при загрузке
+document.addEventListener('DOMContentLoaded', function() {
+    updateOnlineStatus(navigator.onLine);
+});
 
 // Утилиты для отладки
 window.clearAppData = function() {
@@ -645,4 +694,4 @@ window.addTestTask = function() {
     }
 };
 
-console.log('Приложение инициализировано с Firebase (раздельные кнопки входа/регистрации)');
+console.log('Приложение инициализировано с Firebase и оффлайн-режимом');
