@@ -44,10 +44,15 @@ function initApp() {
 }
 
 function setupEventListeners() {
-    // Форма авторизации
+    // Форма входа
     document.getElementById('loginForm').addEventListener('submit', function(e) {
         e.preventDefault();
         handleLogin();
+    });
+    
+    // Кнопка регистрации
+    document.getElementById('registerBtn').addEventListener('click', function() {
+        handleRegister();
     });
     
     // Кнопка выхода
@@ -80,7 +85,7 @@ function initNewFeatures() {
     setupLiteratureFunctionality();
 }
 
-// Аутентификация
+// Аутентификация - ВХОД
 async function handleLogin() {
     const email = document.getElementById('username').value;
     const password = document.getElementById('password').value;
@@ -95,23 +100,70 @@ async function handleLogin() {
     authStatus.style.color = 'white';
 
     try {
-        // Пытаемся войти
         await auth.signInWithEmailAndPassword(email, password);
+        // Успешный вход обрабатывается в onAuthStateChanged
     } catch (error) {
-        if (error.code === 'auth/user-not-found') {
-            // Пользователь не найден - регистрируем
-            try {
-                authStatus.textContent = 'Регистрация...';
-                await auth.createUserWithEmailAndPassword(email, password);
-                showNotification('Аккаунт успешно создан!');
-            } catch (signUpError) {
-                authStatus.textContent = 'Ошибка регистрации: ' + signUpError.message;
-                authStatus.style.color = '#e74c3c';
-            }
+        console.log('Ошибка входа:', error.code);
+        
+        if (error.code === 'auth/invalid-login-credentials') {
+            authStatus.textContent = 'Неверный email или пароль';
+        } else if (error.code === 'auth/user-not-found') {
+            authStatus.textContent = 'Пользователь не найден. Зарегистрируйтесь.';
+        } else if (error.code === 'auth/wrong-password') {
+            authStatus.textContent = 'Неверный пароль';
         } else {
             authStatus.textContent = 'Ошибка входа: ' + error.message;
-            authStatus.style.color = '#e74c3c';
         }
+        authStatus.style.color = '#e74c3c';
+    }
+}
+
+// Аутентификация - РЕГИСТРАЦИЯ
+async function handleRegister() {
+    const email = document.getElementById('username').value;
+    const password = document.getElementById('password').value;
+    const authStatus = document.getElementById('authStatus');
+    
+    if (!email || !password) {
+        showNotification('Заполните все поля');
+        return;
+    }
+
+    // Проверка email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+        authStatus.textContent = 'Введите корректный email';
+        authStatus.style.color = '#e74c3c';
+        return;
+    }
+
+    // Проверка пароля
+    if (password.length < 6) {
+        authStatus.textContent = 'Пароль должен быть не менее 6 символов';
+        authStatus.style.color = '#e74c3c';
+        return;
+    }
+
+    authStatus.textContent = 'Регистрация...';
+    authStatus.style.color = 'white';
+
+    try {
+        await auth.createUserWithEmailAndPassword(email, password);
+        showNotification('Аккаунт успешно создан!');
+        // Успешная регистрация автоматически выполняет вход
+    } catch (error) {
+        console.log('Ошибка регистрации:', error.code);
+        
+        if (error.code === 'auth/email-already-in-use') {
+            authStatus.textContent = 'Этот email уже зарегистрирован. Войдите в систему.';
+        } else if (error.code === 'auth/invalid-email') {
+            authStatus.textContent = 'Неверный формат email';
+        } else if (error.code === 'auth/weak-password') {
+            authStatus.textContent = 'Пароль слишком слабый';
+        } else {
+            authStatus.textContent = 'Ошибка регистрации: ' + error.message;
+        }
+        authStatus.style.color = '#e74c3c';
     }
 }
 
@@ -593,4 +645,4 @@ window.addTestTask = function() {
     }
 };
 
-console.log('Приложение инициализировано с Firebase');
+console.log('Приложение инициализировано с Firebase (раздельные кнопки входа/регистрации)');
