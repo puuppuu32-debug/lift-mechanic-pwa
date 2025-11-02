@@ -435,6 +435,19 @@ body {
     background: #7f8c8d;
 }
 
+.sync-buttons {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+}
+
+.sync-buttons .btn-secondary {
+    flex: 1;
+    min-width: 140px;
+    font-size: 14px;
+}
+
 /* Списки документов */
 .docs-categories {
     display: flex;

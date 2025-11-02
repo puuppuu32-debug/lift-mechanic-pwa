@@ -60,6 +60,7 @@ function setupEventListeners() {
 function initNewFeatures() {
     setupTasksFunctionality();
     setupLiteratureFunctionality();
+    setupSyncFunctionality();
 }
 
 // Функции для работы с заданиями
@@ -137,6 +138,84 @@ function setupLiteratureFunctionality() {
             deleteUserDocument(docName);
         }
     });
+}
+
+// Функции для синхронизации данных
+function setupSyncFunctionality() {
+    // Экспорт данных
+    document.getElementById('exportData').addEventListener('click', function() {
+        exportUserData();
+    });
+    
+    // Импорт данных
+    document.getElementById('importData').addEventListener('click', function() {
+        importUserData();
+    });
+}
+
+// Экспорт данных пользователя
+function exportUserData() {
+    const userData = {
+        userDocuments: JSON.parse(localStorage.getItem('userDocuments') || '[]'),
+        exportDate: new Date().toISOString(),
+        version: '1.0'
+    };
+    
+    const dataStr = JSON.stringify(userData, null, 2);
+    const dataBlob = new Blob([dataStr], {type: 'application/json'});
+    
+    const url = URL.createObjectURL(dataBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `lift-mechanic-backup-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    
+    URL.revokeObjectURL(url);
+    showNotification('Данные успешно экспортированы');
+}
+
+// Импорт данных пользователя
+function importUserData() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    
+    input.onchange = function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        const reader = new FileReader();
+        
+        reader.onload = function(event) {
+            try {
+                const userData = JSON.parse(event.target.result);
+                
+                // Проверяем структуру файла
+                if (!userData.userDocuments) {
+                    throw new Error('Неверный формат файла');
+                }
+                
+                if (confirm(`Импортировать ${userData.userDocuments.length} документов? Текущие документы будут заменены.`)) {
+                    localStorage.setItem('userDocuments', JSON.stringify(userData.userDocuments));
+                    loadUserDocuments();
+                    showNotification(`Успешно импортировано ${userData.userDocuments.length} документов`);
+                }
+            } catch (error) {
+                console.error('Ошибка импорта:', error);
+                showNotification('Ошибка: неверный формат файла');
+            }
+        };
+        
+        reader.onerror = function() {
+            showNotification('Ошибка чтения файла');
+        };
+        
+        reader.readAsText(file);
+    };
+    
+    input.click();
 }
 
 // Управление вкладками
@@ -355,7 +434,14 @@ function getFilterText(filter) {
 
 // Уведомления
 function showNotification(message) {
+    // Проверяем, нет ли уже уведомления
+    const existingNotification = document.querySelector('.custom-notification');
+    if (existingNotification) {
+        existingNotification.remove();
+    }
+    
     const notification = document.createElement('div');
+    notification.className = 'custom-notification';
     notification.style.cssText = `
         position: fixed;
         top: 20px;
@@ -375,7 +461,10 @@ function showNotification(message) {
     
     document.body.appendChild(notification);
     
+    // Анимация появления
     setTimeout(() => notification.style.transform = 'translateX(0)', 100);
+    
+    // Автоматическое скрытие
     setTimeout(() => {
         notification.style.transform = 'translateX(100%)';
         setTimeout(() => {
@@ -495,6 +584,33 @@ window.addTestTask = function() {
         tasksList.appendChild(newTask);
         showNotification('Добавлено тестовое задание');
     }
+};
+
+// Функция для экспорта всех данных приложения
+window.exportAllData = function() {
+    const allData = {
+        userDocuments: JSON.parse(localStorage.getItem('userDocuments') || '[]'),
+        authStatus: {
+            isLoggedIn: localStorage.getItem('isLoggedIn'),
+            username: localStorage.getItem('username')
+        },
+        exportDate: new Date().toISOString(),
+        version: '1.0'
+    };
+    
+    const dataStr = JSON.stringify(allData, null, 2);
+    const dataBlob = new Blob([dataStr], {type: 'application/json'});
+    
+    const url = URL.createObjectURL(dataBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `lift-mechanic-full-backup-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    
+    URL.revokeObjectURL(url);
+    showNotification('Все данные приложения экспортированы');
 };
 
 console.log('Приложение инициализировано');
