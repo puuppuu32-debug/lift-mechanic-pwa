@@ -1,0 +1,10 @@
+{
+  "name": "Электромеханик по лифтам",
+  "short_name": "ЛифтМеханик",
+  "description": "Приложение для электромехаников по обслуживанию лифтов",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#2c3e50",
+  "theme_color": "#667eea",
+  "orientation": "portrait"
+}

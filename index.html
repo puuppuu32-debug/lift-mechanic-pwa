@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Электромеханик по лифтам</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#2c3e50">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛠️</text></svg>">
+</head>
+<body>
+    <!-- Экран авторизации -->
+    <div id="loginScreen" class="screen active">
+        <div class="login-container">
+            <h1>Электромеханик</h1>
+            <form id="loginForm">
+                <div class="input-group">
+                    <input type="text" id="username" placeholder="Логин" required>
+                </div>
+                <div class="input-group">
+                    <input type="password" id="password" placeholder="Пароль" required>
+                </div>
+                <button type="submit" class="btn-primary">Войти</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Главное меню -->
+    <div id="mainMenu" class="screen">
+        <header class="header">
+            <h1>Главное меню</h1>
+            <button id="logoutBtn" class="btn-logout">Выйти</button>
+        </header>
+        
+        <main class="menu-grid">
+            <div class="menu-item" id="tasksBtn">
+                <div class="menu-icon">📋</div>
+                <h3>Задания</h3>
+                <p>Текущие задачи и заявки</p>
+            </div>
+            
+            <div class="menu-item" id="literatureBtn">
+                <div class="menu-icon">📚</div>
+                <h3>Литература</h3>
+                <p>Нормативные документы</p>
+            </div>
+        </main>
+    </div>
+
+    <!-- Модальное окно заданий -->
+    <div id="tasksModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Мои задания</h2>
+                <span class="close">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="tasks-filter">
+                    <button class="filter-btn active" data-filter="all">Все</button>
+                    <button class="filter-btn" data-filter="new">Новые</button>
+                    <button class="filter-btn" data-filter="in-progress">В работе</button>
+                    <button class="filter-btn" data-filter="completed">Выполненные</button>
+                    <button class="filter-btn" data-filter="rejected">Отказанные</button>
+                </div>
+                
+                <div class="tasks-list">
+                    <div class="task-item" data-status="new">
+                        <div class="task-header">
+                            <h3>#001 - Техническое обслуживание</h3>
+                            <span class="task-status new">Новое</span>
+                        </div>
+                        <p><strong>Адрес:</strong> ул. Ленина, 15</p>
+                        <p><strong>Лифт:</strong> KONE MonoSpace 1000</p>
+                        <p><strong>Срок:</strong> до 15.12.2024</p>
+                        <div class="task-actions">
+                            <button class="btn-task accept">Принять в работу</button>
+                            <button class="btn-task reject">Отказаться</button>
+                        </div>
+                    </div>
+                    
+                    <div class="task-item" data-status="in-progress">
+                        <div class="task-header">
+                            <h3>#002 - Диагностика неисправности</h3>
+                            <span class="task-status in-progress">В работе</span>
+                        </div>
+                        <p><strong>Адрес:</strong> пр. Мира, 28</p>
+                        <p><strong>Лифт:</strong> OTIS Elevonic 401</p>
+                        <p><strong>Заявка:</strong> Не работает кнопка вызова</p>
+                        <div class="task-actions">
+                            <button class="btn-task complete">Завершить работу</button>
+                            <button class="btn-task reset">Сбросить статус</button>
+                        </div>
+                    </div>
+
+                    <div class="task-item" data-status="completed">
+                        <div class="task-header">
+                            <h3>#003 - Замена тросов</h3>
+                            <span class="task-status completed">Выполнено</span>
+                        </div>
+                        <p><strong>Адрес:</strong> ул. Центральная, 7</p>
+                        <p><strong>Лифт:</strong> Schindler 3300</p>
+                        <p><strong>Дата выполнения:</strong> 10.12.2024</p>
+                        <div class="task-actions">
+                            <button class="btn-task reset">Сбросить статус</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно литературы -->
+    <div id="literatureModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Техническая литература</h2>
+                <span class="close">&times;</span>
+            </div>
+            <div class="modal-body">
+                <!-- Вкладки -->
+                <div class="tabs">
+                    <button class="tab-btn active" data-tab="library">Библиотека</button>
+                    <button class="tab-btn" data-tab="add-doc">Добавить документ</button>
+                </div>
+
+                <!-- Вкладка библиотеки -->
+                <div id="library-tab" class="tab-content active">
+                    <div class="docs-search">
+                        <input type="text" id="searchDocs" placeholder="Поиск документов..." class="search-input">
+                    </div>
+                    
+                    <div class="docs-categories">
+                        <div class="category-item">
+                            <h3>📖 Нормативные документы</h3>
+                            <ul class="docs-list">
+                                <li><a href="https://docs.google.com/document/d/example1" target="_blank">Технический регламент ТР ТС 011/2011</a></li>
+                                <li><a href="https://docs.google.com/document/d/example2" target="_blank">Правила безопасности лифтов</a></li>
+                                <li><a href="https://docs.google.com/document/d/example3" target="_blank">ГОСТ Р 55964-2014 Лифты пассажирские</a></li>
+                            </ul>
+                        </div>
+                        
+                        <div class="category-item">
+                            <h3>🔧 Инструкции по эксплуатации</h3>
+                            <ul class="docs-list">
+                                <li><a href="https://docs.google.com/document/d/example4" target="_blank">KONE MonoSpace - руководство</a></li>
+                                <li><a href="https://docs.google.com/document/d/example5" target="_blank">OTIS Gen2 - техническое описание</a></li>
+                                <li><a href="https://docs.google.com/document/d/example6" target="_blank">Schindler 3300 - монтаж и обслуживание</a></li>
+                            </ul>
+                        </div>
+
+                        <!-- Пользовательские документы -->
+                        <div class="category-item" id="user-docs-section">
+                            <h3>📁 Мои документы</h3>
+                            <ul class="docs-list" id="user-docs-list">
+                                <!-- Сюда будут добавляться пользовательские документы -->
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Вкладка добавления документа -->
+                <div id="add-doc-tab" class="tab-content">
+                    <form id="addDocForm" class="doc-form">
+                        <div class="form-group">
+                            <label for="docName">Название документа:</label>
+                            <input type="text" id="docName" required class="form-input" placeholder="Введите название документа">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="docUrl">Ссылка на документ:</label>
+                            <input type="url" id="docUrl" required class="form-input" placeholder="https://example.com/document.pdf">
+                            <small class="form-hint">Поддерживаются PDF, Word, Excel и другие форматы</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="docCategory">Категория:</label>
+                            <select id="docCategory" class="form-input">
+                                <option value="user">Мои документы</option>
+                                <option value="normative">Нормативные документы</option>
+                                <option value="instructions">Инструкции по эксплуатации</option>
+                                <option value="schemes">Электромонтажные схемы</option>
+                            </select>
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="submit" class="btn-primary">Добавить документ</button>
+                            <button type="button" id="clearDocsBtn" class="btn-secondary">Очистить мои документы</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
