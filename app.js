@@ -1,27 +1,46 @@
+// Конфигурация Firebase
+const firebaseConfig = {
+    apiKey: "AIzaSyDQd5RZyQAyOoI6Qzu6aCuQOxWSUQOVOxM",
+    authDomain: "lift-mechanic-pwa.firebaseapp.com",
+    projectId: "lift-mechanic-pwa",
+    storageBucket: "lift-mechanic-pwa.firebasestorage.app",
+    messagingSenderId: "504828099853",
+    appId: "1:504828099853:web:6af96c6d3c79afa0930444",
+    measurementId: "G-T5J495YEL8"
+};
+
+// Инициализация Firebase
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const auth = firebase.auth();
+
+// Глобальные переменные
+let currentUser = null;
+let userDocuments = [];
+
 document.addEventListener('DOMContentLoaded', function() {
-    // Инициализация приложения
     initApp();
 });
 
 function initApp() {
-    // Проверка авторизации
-    const isLoggedIn = localStorage.getItem('isLoggedIn');
-    console.log('Статус авторизации:', isLoggedIn);
-    
-    if (isLoggedIn === 'true') {
-        showMainMenu();
-    } else {
-        showLoginScreen();
-    }
+    // Слушатель изменения состояния аутентификации
+    auth.onAuthStateChanged(function(user) {
+        if (user) {
+            // Пользователь вошел
+            currentUser = user;
+            showMainMenu();
+            loadUserData();
+            showNotification(`Добро пожаловать, ${user.email}!`);
+        } else {
+            // Пользователь вышел
+            currentUser = null;
+            userDocuments = [];
+            showLoginScreen();
+        }
+    });
 
-    // Настройка обработчиков событий
     setupEventListeners();
-    
-    // Инициализация новых функций
     initNewFeatures();
-    
-    // Загрузка пользовательских документов
-    loadUserDocuments();
 }
 
 function setupEventListeners() {
@@ -41,7 +60,6 @@ function setupEventListeners() {
     
     document.getElementById('literatureBtn').addEventListener('click', function() {
         showModal('literatureModal');
-        loadUserDocuments(); // Перезагружаем документы при открытии
     });
     
     // Закрытие модальных окон
@@ -60,12 +78,58 @@ function setupEventListeners() {
 function initNewFeatures() {
     setupTasksFunctionality();
     setupLiteratureFunctionality();
-    setupSyncFunctionality();
+}
+
+// Аутентификация
+async function handleLogin() {
+    const email = document.getElementById('username').value;
+    const password = document.getElementById('password').value;
+    const authStatus = document.getElementById('authStatus');
+    
+    if (!email || !password) {
+        showNotification('Заполните все поля');
+        return;
+    }
+
+    authStatus.textContent = 'Вход...';
+    authStatus.style.color = 'white';
+
+    try {
+        // Пытаемся войти
+        await auth.signInWithEmailAndPassword(email, password);
+    } catch (error) {
+        if (error.code === 'auth/user-not-found') {
+            // Пользователь не найден - регистрируем
+            try {
+                authStatus.textContent = 'Регистрация...';
+                await auth.createUserWithEmailAndPassword(email, password);
+                showNotification('Аккаунт успешно создан!');
+            } catch (signUpError) {
+                authStatus.textContent = 'Ошибка регистрации: ' + signUpError.message;
+                authStatus.style.color = '#e74c3c';
+            }
+        } else {
+            authStatus.textContent = 'Ошибка входа: ' + error.message;
+            authStatus.style.color = '#e74c3c';
+        }
+    }
+}
+
+function handleLogout() {
+    auth.signOut();
+    showNotification('Вы вышли из системы');
+}
+
+// Загрузка пользовательских данных
+async function loadUserData() {
+    if (!currentUser) return;
+
+    document.getElementById('userEmail').textContent = currentUser.email;
+    await loadUserDocuments();
 }
 
 // Функции для работы с заданиями
 function setupTasksFunctionality() {
-    // Фильтрация заданий
     document.querySelectorAll('.filter-btn').forEach(btn => {
         btn.addEventListener('click', function() {
             const filter = this.getAttribute('data-filter');
@@ -75,12 +139,10 @@ function setupTasksFunctionality() {
         });
     });
     
-    // Обработка действий с заданиями
     document.addEventListener('click', function(e) {
         if (e.target.classList.contains('btn-task')) {
             const taskItem = e.target.closest('.task-item');
             const taskTitle = taskItem.querySelector('h3').textContent;
-            const taskStatus = taskItem.getAttribute('data-status');
             
             if (e.target.classList.contains('accept')) {
                 updateTaskStatus(taskItem, 'in-progress');
@@ -104,7 +166,6 @@ function setupTasksFunctionality() {
 
 // Функции для работы с литературой
 function setupLiteratureFunctionality() {
-    // Переключение вкладок
     document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.addEventListener('click', function() {
             const tabName = this.getAttribute('data-tab');
@@ -112,110 +173,28 @@ function setupLiteratureFunctionality() {
         });
     });
     
-    // Форма добавления документа
     document.getElementById('addDocForm').addEventListener('submit', function(e) {
         e.preventDefault();
         addUserDocument();
     });
     
-    // Кнопка очистки документов
     document.getElementById('clearDocsBtn').addEventListener('click', function() {
         if (confirm('Вы уверены, что хотите удалить все ваши документы?')) {
             clearUserDocuments();
         }
     });
     
-    // Поиск документов
     document.getElementById('searchDocs').addEventListener('input', function(e) {
         searchDocuments(e.target.value);
     });
     
-    // Обработка удаления документов
     document.addEventListener('click', function(e) {
         if (e.target.classList.contains('btn-delete')) {
             const docItem = e.target.closest('li');
-            const docName = docItem.querySelector('a').textContent;
-            deleteUserDocument(docName);
+            const docId = docItem.getAttribute('data-doc-id');
+            deleteUserDocument(docId);
         }
     });
-}
-
-// Функции для синхронизации данных
-function setupSyncFunctionality() {
-    // Экспорт данных
-    document.getElementById('exportData').addEventListener('click', function() {
-        exportUserData();
-    });
-    
-    // Импорт данных
-    document.getElementById('importData').addEventListener('click', function() {
-        importUserData();
-    });
-}
-
-// Экспорт данных пользователя
-function exportUserData() {
-    const userData = {
-        userDocuments: JSON.parse(localStorage.getItem('userDocuments') || '[]'),
-        exportDate: new Date().toISOString(),
-        version: '1.0'
-    };
-    
-    const dataStr = JSON.stringify(userData, null, 2);
-    const dataBlob = new Blob([dataStr], {type: 'application/json'});
-    
-    const url = URL.createObjectURL(dataBlob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `lift-mechanic-backup-${new Date().toISOString().split('T')[0]}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    
-    URL.revokeObjectURL(url);
-    showNotification('Данные успешно экспортированы');
-}
-
-// Импорт данных пользователя
-function importUserData() {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.json';
-    
-    input.onchange = function(e) {
-        const file = e.target.files[0];
-        if (!file) return;
-        
-        const reader = new FileReader();
-        
-        reader.onload = function(event) {
-            try {
-                const userData = JSON.parse(event.target.result);
-                
-                // Проверяем структуру файла
-                if (!userData.userDocuments) {
-                    throw new Error('Неверный формат файла');
-                }
-                
-                if (confirm(`Импортировать ${userData.userDocuments.length} документов? Текущие документы будут заменены.`)) {
-                    localStorage.setItem('userDocuments', JSON.stringify(userData.userDocuments));
-                    loadUserDocuments();
-                    showNotification(`Успешно импортировано ${userData.userDocuments.length} документов`);
-                }
-            } catch (error) {
-                console.error('Ошибка импорта:', error);
-                showNotification('Ошибка: неверный формат файла');
-            }
-        };
-        
-        reader.onerror = function() {
-            showNotification('Ошибка чтения файла');
-        };
-        
-        reader.readAsText(file);
-    };
-    
-    input.click();
 }
 
 // Управление вкладками
@@ -227,8 +206,13 @@ function switchTab(tabName) {
     document.getElementById(`${tabName}-tab`).classList.add('active');
 }
 
-// Добавление пользовательского документа
-function addUserDocument() {
+// Работа с документами в Firestore
+async function addUserDocument() {
+    if (!currentUser) {
+        showNotification('Сначала войдите в систему');
+        return;
+    }
+
     const docName = document.getElementById('docName').value;
     const docUrl = document.getElementById('docUrl').value;
     const docCategory = document.getElementById('docCategory').value;
@@ -238,51 +222,82 @@ function addUserDocument() {
         return;
     }
     
-    // Валидация URL
     try {
         new URL(docUrl);
     } catch (e) {
         showNotification('Введите корректную ссылку');
         return;
     }
-    
-    const userDocs = JSON.parse(localStorage.getItem('userDocuments') || '[]');
-    
-    if (userDocs.some(doc => doc.name === docName)) {
-        showNotification('Документ с таким названием уже существует');
-        return;
-    }
-    
-    userDocs.push({
+
+    const newDoc = {
         name: docName,
         url: docUrl,
         category: docCategory,
-        added: new Date().toISOString()
-    });
-    
-    localStorage.setItem('userDocuments', JSON.stringify(userDocs));
-    loadUserDocuments();
-    document.getElementById('addDocForm').reset();
-    switchTab('library');
-    showNotification(`Документ "${docName}" добавлен`);
+        added: new Date().toISOString(),
+        userId: currentUser.uid
+    };
+
+    try {
+        await db.collection('documents').add(newDoc);
+        showNotification(`Документ "${docName}" добавлен`);
+        document.getElementById('addDocForm').reset();
+        switchTab('library');
+        await loadUserDocuments(); // Перезагружаем список
+    } catch (error) {
+        console.error('Ошибка добавления документа:', error);
+        showNotification('Ошибка при добавлении документа');
+    }
 }
 
-// Загрузка пользовательских документов
-function loadUserDocuments() {
-    const userDocs = JSON.parse(localStorage.getItem('userDocuments') || '[]');
+async function loadUserDocuments() {
+    if (!currentUser) return;
+
+    const syncStatus = document.getElementById('syncStatus');
+    syncStatus.textContent = 'Загрузка документов...';
+    syncStatus.style.background = '#fff3cd';
+    syncStatus.style.color = '#856404';
+
+    try {
+        const snapshot = await db.collection('documents')
+            .where('userId', '==', currentUser.uid)
+            .orderBy('added', 'desc')
+            .get();
+
+        userDocuments = [];
+        snapshot.forEach(doc => {
+            userDocuments.push({
+                id: doc.id,
+                ...doc.data()
+            });
+        });
+
+        displayUserDocuments();
+        
+        syncStatus.textContent = `Загружено документов: ${userDocuments.length}`;
+        syncStatus.style.background = '#d1edff';
+        syncStatus.style.color = '#004085';
+        
+    } catch (error) {
+        console.error('Ошибка загрузки документов:', error);
+        syncStatus.textContent = 'Ошибка загрузки';
+        syncStatus.style.background = '#f8d7da';
+        syncStatus.style.color = '#721c24';
+    }
+}
+
+function displayUserDocuments() {
     const userDocsList = document.getElementById('user-docs-list');
     const userDocsSection = document.getElementById('user-docs-section');
     
-    if (userDocs.length === 0) {
-        userDocsSection.style.display = 'none';
+    if (userDocuments.length === 0) {
+        userDocsList.innerHTML = '<li style="color: #7f8c8d; text-align: center;">Нет документов</li>';
         return;
     }
     
-    userDocsSection.style.display = 'block';
     userDocsList.innerHTML = '';
     
     const docsByCategory = {};
-    userDocs.forEach(doc => {
+    userDocuments.forEach(doc => {
         if (!docsByCategory[doc.category]) {
             docsByCategory[doc.category] = [];
         }
@@ -299,6 +314,7 @@ function loadUserDocuments() {
         
         docsByCategory[category].forEach(doc => {
             const docItem = document.createElement('li');
+            docItem.setAttribute('data-doc-id', doc.id);
             docItem.innerHTML = `
                 <a href="${doc.url}" target="_blank" rel="noopener noreferrer">
                     ${doc.name}
@@ -312,36 +328,39 @@ function loadUserDocuments() {
     });
 }
 
-// Получение названия категории
-function getCategoryTitle(categoryKey) {
-    const categories = {
-        'user': '📁 Мои документы',
-        'normative': '📖 Нормативные документы',
-        'instructions': '🔧 Инструкции',
-        'schemes': '⚡ Схемы'
-    };
-    return categories[categoryKey] || categoryKey;
-}
+async function deleteUserDocument(docId) {
+    if (!confirm('Удалить документ?')) return;
 
-// Удаление пользовательского документа
-function deleteUserDocument(docName) {
-    if (!confirm(`Удалить документ "${docName}"?`)) {
-        return;
+    try {
+        await db.collection('documents').doc(docId).delete();
+        showNotification('Документ удален');
+        await loadUserDocuments(); // Перезагружаем список
+    } catch (error) {
+        console.error('Ошибка удаления документа:', error);
+        showNotification('Ошибка при удалении документа');
     }
-    
-    const userDocs = JSON.parse(localStorage.getItem('userDocuments') || '[]');
-    const updatedDocs = userDocs.filter(doc => doc.name !== docName);
-    
-    localStorage.setItem('userDocuments', JSON.stringify(updatedDocs));
-    loadUserDocuments();
-    showNotification(`Документ "${docName}" удален`);
 }
 
-// Очистка всех пользовательских документов
-function clearUserDocuments() {
-    localStorage.removeItem('userDocuments');
-    loadUserDocuments();
-    showNotification('Все документы удалены');
+async function clearUserDocuments() {
+    if (!confirm('Удалить ВСЕ ваши документы? Это действие нельзя отменить.')) return;
+
+    try {
+        const snapshot = await db.collection('documents')
+            .where('userId', '==', currentUser.uid)
+            .get();
+
+        const batch = db.batch();
+        snapshot.forEach(doc => {
+            batch.delete(doc.ref);
+        });
+
+        await batch.commit();
+        showNotification('Все документы удалены');
+        await loadUserDocuments();
+    } catch (error) {
+        console.error('Ошибка очистки документов:', error);
+        showNotification('Ошибка при удалении документов');
+    }
 }
 
 // Поиск документов
@@ -359,7 +378,17 @@ function searchDocuments(query) {
     });
 }
 
-// Обновление статуса задания
+// Вспомогательные функции
+function getCategoryTitle(categoryKey) {
+    const categories = {
+        'user': '📁 Мои документы',
+        'normative': '📖 Нормативные документы',
+        'instructions': '🔧 Инструкции',
+        'schemes': '⚡ Схемы'
+    };
+    return categories[categoryKey] || categoryKey;
+}
+
 function updateTaskStatus(taskItem, newStatus) {
     const statusElement = taskItem.querySelector('.task-status');
     const taskActions = taskItem.querySelector('.task-actions');
@@ -434,7 +463,6 @@ function getFilterText(filter) {
 
 // Уведомления
 function showNotification(message) {
-    // Проверяем, нет ли уже уведомления
     const existingNotification = document.querySelector('.custom-notification');
     if (existingNotification) {
         existingNotification.remove();
@@ -461,10 +489,7 @@ function showNotification(message) {
     
     document.body.appendChild(notification);
     
-    // Анимация появления
     setTimeout(() => notification.style.transform = 'translateX(0)', 100);
-    
-    // Автоматическое скрытие
     setTimeout(() => {
         notification.style.transform = 'translateX(100%)';
         setTimeout(() => {
@@ -475,28 +500,6 @@ function showNotification(message) {
     }, 3000);
 }
 
-function handleLogin() {
-    const username = document.getElementById('username').value;
-    const password = document.getElementById('password').value;
-    
-    if (username && password) {
-        localStorage.setItem('isLoggedIn', 'true');
-        localStorage.setItem('username', username);
-        
-        showMainMenu();
-        showNotification(`Добро пожаловать, ${username}!`);
-    } else {
-        showNotification('Пожалуйста, заполните все поля');
-    }
-}
-
-function handleLogout() {
-    localStorage.removeItem('isLoggedIn');
-    localStorage.removeItem('username');
-    showLoginScreen();
-    showNotification('Вы вышли из системы');
-}
-
 function showLoginScreen() {
     document.getElementById('mainMenu').classList.remove('active');
     document.getElementById('loginScreen').classList.add('active');
@@ -505,6 +508,7 @@ function showLoginScreen() {
     if (loginForm) {
         loginForm.reset();
     }
+    document.getElementById('authStatus').textContent = '';
 }
 
 function showMainMenu() {
@@ -547,16 +551,19 @@ if ('serviceWorker' in navigator) {
 
 // Утилиты для отладки
 window.clearAppData = function() {
-    localStorage.clear();
-    console.log('Все данные приложения очищены');
-    showNotification('Данные очищены');
-    setTimeout(() => location.reload(), 1000);
+    if (confirm('Очистить все данные приложения?')) {
+        localStorage.clear();
+        auth.signOut();
+        showNotification('Все данные очищены');
+        setTimeout(() => location.reload(), 1000);
+    }
 };
 
 window.getAuthStatus = function() {
     return {
-        isLoggedIn: localStorage.getItem('isLoggedIn'),
-        username: localStorage.getItem('username')
+        currentUser: currentUser,
+        isLoggedIn: !!currentUser,
+        userDocuments: userDocuments
     };
 };
 
@@ -586,31 +593,4 @@ window.addTestTask = function() {
     }
 };
 
-// Функция для экспорта всех данных приложения
-window.exportAllData = function() {
-    const allData = {
-        userDocuments: JSON.parse(localStorage.getItem('userDocuments') || '[]'),
-        authStatus: {
-            isLoggedIn: localStorage.getItem('isLoggedIn'),
-            username: localStorage.getItem('username')
-        },
-        exportDate: new Date().toISOString(),
-        version: '1.0'
-    };
-    
-    const dataStr = JSON.stringify(allData, null, 2);
-    const dataBlob = new Blob([dataStr], {type: 'application/json'});
-    
-    const url = URL.createObjectURL(dataBlob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `lift-mechanic-full-backup-${new Date().toISOString().split('T')[0]}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    
-    URL.revokeObjectURL(url);
-    showNotification('Все данные приложения экспортированы');
-};
-
-console.log('Приложение инициализировано');
+console.log('Приложение инициализировано с Firebase');

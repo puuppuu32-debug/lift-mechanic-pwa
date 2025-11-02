@@ -550,3 +550,25 @@ body {
         flex: none;
     }
 }
+
+#syncStatus {
+    transition: all 0.3s ease;
+}
+
+/* Адаптивность для мобильных */
+@media (max-width: 480px) {
+    .sync-buttons {
+        flex-direction: column;
+    }
+    
+    .header {
+        flex-direction: column;
+        gap: 10px;
+        text-align: center;
+    }
+    
+    #userEmail {
+        display: block;
+        margin-top: 5px;
+    }
+}
