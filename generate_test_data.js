@@ -1,18 +1,13 @@
-const { initializeApp } = require('firebase/app');
-const { getFirestore, collection, addDoc, serverTimestamp } = require('firebase/firestore');
+const admin = require('firebase-admin');
 
-const firebaseConfig = {
-  apiKey: "AIzaSyDQd5RZyQAyOoI6Qzu6aCuQOxWSUQOVOxM",
-  authDomain: "lift-mechanic-pwa.firebaseapp.com",
-  projectId: "lift-mechanic-pwa",
-  storageBucket: "lift-mechanic-pwa.firebasestorage.app",
-  messagingSenderId: "504828099853",
-  appId: "1:504828099853:web:6af96c6d3c79afa0930444"
-};
+// Инициализация с сервисным аккаунтом
+const serviceAccount = require('./service-account-key.json');
 
-// Инициализация Firebase
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount)
+});
+
+const db = admin.firestore();
 
 // Генерация тестовых задач
 function generateTestTasks(userIdPrefix, count = 50) {
@@ -32,8 +27,8 @@ function generateTestTasks(userIdPrefix, count = 50) {
       deadline: `2024-12-${String(i % 28 + 1).padStart(2, '0')}`,
       status: statuses[i % statuses.length],
       userId: `${userIdPrefix}_user_${i % 5}`,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
     });
   }
   return tasks;
@@ -49,7 +44,7 @@ function generateTestDocuments(userIdPrefix, count = 30) {
       name: `Тестовый документ #${i}`,
       url: `https://example.com/document${i}.pdf`,
       category: categories[i % categories.length],
-      added: serverTimestamp(),
+      added: admin.firestore.FieldValue.serverTimestamp(),
       userId: `${userIdPrefix}_user_${i % 5}`,
       cached: false
     });
@@ -62,31 +57,41 @@ async function populateTestData() {
   try {
     console.log('🚀 Начинаем заполнение тестовых данных...');
 
-    // Генерация данных для PWA
+    // Генерация данных
     const pwaTasks = generateTestTasks('pwa', 50);
     const pwaDocuments = generateTestDocuments('pwa', 30);
-
-    // Генерация данных для Flutter
     const flutterTasks = generateTestTasks('flutter', 50);
     const flutterDocuments = generateTestDocuments('flutter', 30);
 
-    // Заполнение PWA коллекций
-    console.log('📝 Заполняем PWA коллекции...');
-    for (const task of pwaTasks) {
-      await addDoc(collection(db, 'tasks_pwa'), task);
-    }
-    for (const doc of pwaDocuments) {
-      await addDoc(collection(db, 'documents_pwa'), doc);
-    }
+    // Пакетная запись для производительности
+    const batch = db.batch();
 
-    // Заполнение Flutter коллекций
-    console.log('📱 Заполняем Flutter коллекции...');
-    for (const task of flutterTasks) {
-      await addDoc(collection(db, 'tasks_flutter'), task);
-    }
-    for (const doc of flutterDocuments) {
-      await addDoc(collection(db, 'documents_flutter'), doc);
-    }
+    // Добавляем задачи PWA
+    pwaTasks.forEach(task => {
+      const docRef = db.collection('tasks_pwa').doc();
+      batch.set(docRef, task);
+    });
+
+    // Добавляем документы PWA
+    pwaDocuments.forEach(doc => {
+      const docRef = db.collection('documents_pwa').doc();
+      batch.set(docRef, doc);
+    });
+
+    // Добавляем задачи Flutter
+    flutterTasks.forEach(task => {
+      const docRef = db.collection('tasks_flutter').doc();
+      batch.set(docRef, task);
+    });
+
+    // Добавляем документы Flutter
+    flutterDocuments.forEach(doc => {
+      const docRef = db.collection('documents_flutter').doc();
+      batch.set(docRef, doc);
+    });
+
+    // Выполняем пакетную запись
+    await batch.commit();
 
     console.log('✅ Тестовые данные успешно созданы!');
     console.log(`📊 PWA: ${pwaTasks.length} задач, ${pwaDocuments.length} документов`);
