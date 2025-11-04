@@ -61,6 +61,7 @@ function setupEventListeners() {
     // Кнопки меню
     document.getElementById('tasksBtn').addEventListener('click', function() {
         showModal('tasksModal');
+        loadTasks(); // Загружаем задания из Firebase
     });
     
     document.getElementById('literatureBtn').addEventListener('click', function() {
@@ -216,6 +217,96 @@ function setupTasksFunctionality() {
     });
 }
 
+// Загрузка заданий из Firebase
+async function loadTasks() {
+    if (!currentUser) return;
+
+    try {
+        const tasksList = document.querySelector('.tasks-list');
+        tasksList.innerHTML = '<div style="text-align: center; color: #7f8c8d;">Загрузка заданий...</div>';
+
+        // Загружаем задания из коллекции tasks_pwa
+        const snapshot = await db.collection('tasks_pwa')
+            .where('userId', '==', currentUser.uid)
+            .orderBy('added', 'desc')
+            .get();
+
+        tasksList.innerHTML = '';
+
+        if (snapshot.empty) {
+            tasksList.innerHTML = '<div style="text-align: center; color: #7f8c8d;">Нет заданий</div>';
+            return;
+        }
+
+        snapshot.forEach(doc => {
+            const task = {
+                id: doc.id,
+                ...doc.data()
+            };
+            const taskElement = createTaskElement(task);
+            tasksList.appendChild(taskElement);
+        });
+
+    } catch (error) {
+        console.error('Ошибка загрузки заданий:', error);
+        const tasksList = document.querySelector('.tasks-list');
+        tasksList.innerHTML = '<div style="text-align: center; color: #e74c3c;">Ошибка загрузки заданий</div>';
+    }
+}
+
+function createTaskElement(task) {
+    const taskItem = document.createElement('div');
+    taskItem.className = 'task-item';
+    taskItem.setAttribute('data-task-id', task.id);
+    taskItem.setAttribute('data-status', task.status || 'new');
+    
+    taskItem.innerHTML = `
+        <div class="task-header">
+            <h3>${task.title || 'Без названия'}</h3>
+            <span class="task-status ${task.status || 'new'}">${getStatusText(task.status || 'new')}</span>
+        </div>
+        ${task.description ? `<p><strong>Описание:</strong> ${task.description}</p>` : ''}
+        ${task.address ? `<p><strong>Адрес:</strong> ${task.address}</p>` : ''}
+        ${task.lift ? `<p><strong>Лифт:</strong> ${task.lift}</p>` : ''}
+        ${task.deadline ? `<p><strong>Срок:</strong> ${task.deadline}</p>` : ''}
+        ${task.priority ? `<p><strong>Приоритет:</strong> ${task.priority}</p>` : ''}
+        <div class="task-actions">
+            ${getTaskActions(task.status || 'new')}
+        </div>
+    `;
+    
+    return taskItem;
+}
+
+// Обновление статуса задания в Firebase
+async function updateTaskStatus(taskItem, newStatus) {
+    const taskId = taskItem.getAttribute('data-task-id');
+    const taskTitle = taskItem.querySelector('h3').textContent;
+    
+    try {
+        // Обновляем в Firebase
+        await db.collection('tasks_pwa').doc(taskId).update({
+            status: newStatus,
+            updated: new Date().toISOString()
+        });
+
+        // Обновляем локально
+        const statusElement = taskItem.querySelector('.task-status');
+        const taskActions = taskItem.querySelector('.task-actions');
+        
+        taskItem.setAttribute('data-status', newStatus);
+        statusElement.textContent = getStatusText(newStatus);
+        statusElement.className = 'task-status ' + newStatus;
+        taskActions.innerHTML = getTaskActions(newStatus);
+        
+        showNotification(`Статус задания "${taskTitle}" обновлен на "${getStatusText(newStatus)}"`);
+        
+    } catch (error) {
+        console.error('Ошибка обновления задания:', error);
+        showNotification('Ошибка при обновлении задания');
+    }
+}
+
 // Функции для работы с литературой
 function setupLiteratureFunctionality() {
     document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -258,7 +349,7 @@ function switchTab(tabName) {
     document.getElementById(`${tabName}-tab`).classList.add('active');
 }
 
-// Работа с документами в Firestore
+// Работа с документами в Firestore (коллекция documents_pwa)
 async function addUserDocument() {
     if (!currentUser) {
         showNotification('Сначала войдите в систему');
@@ -290,7 +381,7 @@ async function addUserDocument() {
     };
 
     try {
-        await db.collection('documents').add(newDoc);
+        await db.collection('documents_pwa').add(newDoc);
         showNotification(`Документ "${docName}" добавлен`);
         document.getElementById('addDocForm').reset();
         switchTab('library');
@@ -310,7 +401,7 @@ async function loadUserDocuments() {
     syncStatus.style.color = '#856404';
 
     try {
-        const snapshot = await db.collection('documents')
+        const snapshot = await db.collection('documents_pwa')
             .where('userId', '==', currentUser.uid)
             .orderBy('added', 'desc')
             .get();
@@ -384,7 +475,7 @@ async function deleteUserDocument(docId) {
     if (!confirm('Удалить документ?')) return;
 
     try {
-        await db.collection('documents').doc(docId).delete();
+        await db.collection('documents_pwa').doc(docId).delete();
         showNotification('Документ удален');
         await loadUserDocuments(); // Перезагружаем список
     } catch (error) {
@@ -397,7 +488,7 @@ async function clearUserDocuments() {
     if (!confirm('Удалить ВСЕ ваши документы? Это действие нельзя отменить.')) return;
 
     try {
-        const snapshot = await db.collection('documents')
+        const snapshot = await db.collection('documents_pwa')
             .where('userId', '==', currentUser.uid)
             .get();
 
@@ -439,16 +530,6 @@ function getCategoryTitle(categoryKey) {
         'schemes': '⚡ Схемы'
     };
     return categories[categoryKey] || categoryKey;
-}
-
-function updateTaskStatus(taskItem, newStatus) {
-    const statusElement = taskItem.querySelector('.task-status');
-    const taskActions = taskItem.querySelector('.task-actions');
-    
-    taskItem.setAttribute('data-status', newStatus);
-    statusElement.textContent = getStatusText(newStatus);
-    statusElement.className = 'task-status ' + newStatus;
-    taskActions.innerHTML = getTaskActions(newStatus);
 }
 
 function getStatusText(status) {
@@ -617,6 +698,10 @@ if ('serviceWorker' in navigator) {
             // При восстановлении соединения можно синхронизировать данные
             if (currentUser) {
                 loadUserDocuments();
+                // Можно также перезагрузить задания, если модальное окно открыто
+                if (document.getElementById('tasksModal').style.display === 'block') {
+                    loadTasks();
+                }
             }
             updateOnlineStatus(true);
         });
@@ -670,28 +755,34 @@ window.getAuthStatus = function() {
 
 // Функция для добавления тестового задания
 window.addTestTask = function() {
-    const tasksList = document.querySelector('.tasks-list');
-    if (tasksList) {
-        const taskId = Date.now();
-        const newTask = document.createElement('div');
-        newTask.className = 'task-item';
-        newTask.setAttribute('data-status', 'new');
-        newTask.innerHTML = `
-            <div class="task-header">
-                <h3>#${taskId} - Плановый осмотр</h3>
-                <span class="task-status new">Новое</span>
-            </div>
-            <p><strong>Адрес:</strong> ул. Советская, 45</p>
-            <p><strong>Лифт:</strong> Schindler 3300</p>
-            <p><strong>Срок:</strong> до 20.12.2024</p>
-            <div class="task-actions">
-                <button class="btn-task accept">Принять в работу</button>
-                <button class="btn-task reject">Отказаться</button>
-            </div>
-        `;
-        tasksList.appendChild(newTask);
-        showNotification('Добавлено тестовое задание');
+    if (!currentUser) {
+        showNotification('Сначала войдите в систему');
+        return;
     }
+
+    const newTask = {
+        title: `Тестовое задание #${Date.now()}`,
+        description: 'Плановый осмотр лифтового оборудования',
+        address: 'ул. Тестовая, 123',
+        lift: 'Schindler 3300',
+        deadline: 'до 31.12.2024',
+        priority: 'Средний',
+        status: 'new',
+        added: new Date().toISOString(),
+        userId: currentUser.uid
+    };
+
+    db.collection('tasks_pwa').add(newTask)
+        .then(() => {
+            showNotification('Тестовое задание добавлено');
+            if (document.getElementById('tasksModal').style.display === 'block') {
+                loadTasks(); // Перезагружаем список, если модальное окно открыто
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка добавления тестового задания:', error);
+            showNotification('Ошибка при добавлении задания');
+        });
 };
 
 console.log('Приложение инициализировано с Firebase и оффлайн-режимом');
