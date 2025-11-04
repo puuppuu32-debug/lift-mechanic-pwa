@@ -1,28 +1,40 @@
-// sw.js v4 - Enhanced offline support
-const CACHE_NAME = 'lift-mechanic-enhanced-v1';
-const OFFLINE_URL = '/offline.html';
+// sw.js v5 - Full offline functionality
+const CACHE_NAME = 'lift-mechanic-full-v1';
+const APP_SHELL = [
+  '/',
+  '/index.html',
+  '/style.css',
+  '/app.js',
+  '/manifest.json',
+  '/offline.html'
+];
 
 self.addEventListener('install', (event) => {
-  console.log('Service Worker: Installing with enhanced caching');
+  console.log('Service Worker: Installing with app shell');
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => {
-        // Кэшируем КРИТИЧЕСКИЕ ресурсы для оффлайн работы
-        return cache.addAll([
-          '/',
-          '/offline.html',
-          '/style.css', 
-          '/app.js',
-          '/manifest.json'
-        ]);
+        console.log('Caching app shell');
+        return cache.addAll(APP_SHELL);
       })
       .then(() => self.skipWaiting())
   );
 });
 
 self.addEventListener('activate', (event) => {
-  console.log('Service Worker: Activated enhanced version');
-  event.waitUntil(self.clients.claim());
+  console.log('Service Worker: Activated');
+  event.waitUntil(
+    caches.keys().then(cacheNames => {
+      return Promise.all(
+        cacheNames.map(cacheName => {
+          if (cacheName !== CACHE_NAME) {
+            console.log('Deleting old cache:', cacheName);
+            return caches.delete(cacheName);
+          }
+        })
+      );
+    }).then(() => self.clients.claim())
+  );
 });
 
 self.addEventListener('fetch', (event) => {
@@ -34,36 +46,52 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Для навигационных запросов (HTML страниц)
+  // Для навигационных запросов (главная страница)
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request)
+        .then(response => {
+          // Обновляем кэш при успешном запросе
+          const responseClone = response.clone();
+          caches.open(CACHE_NAME)
+            .then(cache => cache.put(event.request, responseClone));
+          return response;
+        })
         .catch(() => {
-          // При ошибке сети возвращаем оффлайн страницу
-          return caches.match(OFFLINE_URL);
+          // При оффлайне возвращаем закэшированное приложение
+          return caches.match('/index.html');
         })
     );
     return;
   }
 
-  // Для статических ресурсов
+  // Для статических ресурсов приложения
   event.respondWith(
-    caches.open(CACHE_NAME)
-      .then((cache) => {
-        return cache.match(event.request)
-          .then((cachedResponse) => {
-            if (cachedResponse) {
-              return cachedResponse;
+    caches.match(event.request)
+      .then(cachedResponse => {
+        if (cachedResponse) {
+          return cachedResponse;
+        }
+        
+        return fetch(event.request)
+          .then(networkResponse => {
+            // Кэшируем новые ресурсы
+            if (networkResponse.ok) {
+              const responseClone = networkResponse.clone();
+              caches.open(CACHE_NAME)
+                .then(cache => cache.put(event.request, responseClone));
             }
-            
-            return fetch(event.request)
-              .then((networkResponse) => {
-                cache.put(event.request, networkResponse.clone());
-                return networkResponse;
-              })
-              .catch(() => {
-                return new Response('Offline resource');
+            return networkResponse;
+          })
+          .catch(error => {
+            console.log('Fetch failed; returning offline page:', error);
+            // Для API запросов возвращаем пустой ответ или заглушку
+            if (event.request.url.includes('/api/')) {
+              return new Response(JSON.stringify({ offline: true }), {
+                headers: { 'Content-Type': 'application/json' }
               });
+            }
+            return new Response('Offline');
           });
       })
   );

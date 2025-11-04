@@ -1,11 +1,12 @@
-// app.js v2.4 - Fixed db undefined error
-console.log('App version 2.4 - Fixed Firebase initialization');
+// app.js v2.5 - Enhanced offline support
+console.log('App version 2.5 - Enhanced offline support');
 
 // Глобальные переменные
 let currentUser = null;
 let userDocuments = [];
 let db = null;
 let auth = null;
+let isOffline = false;
 
 // Конфигурация Firebase
 const firebaseConfig = {
@@ -41,13 +42,40 @@ window.initApp = function() {
         initAuthListener();
         setupEventListeners();
         
+        // Инициализируем оффлайн данные
+        initOfflineData();
+        
     } catch (error) {
         console.error('❌ Firebase initialization failed:', error);
         showNotification('Приложение загружено в ограниченном режиме');
         // Все равно настраиваем обработчики для базового функционала
         setupBasicEventListeners();
+        initOfflineData();
     }
 };
+
+// Инициализация оффлайн данных
+function initOfflineData() {
+    console.log('Initializing offline data...');
+    
+    // Проверяем есть ли сохраненные данные
+    const cachedUser = localStorage.getItem('cachedCurrentUser');
+    if (cachedUser && !currentUser) {
+        try {
+            const userData = JSON.parse(cachedUser);
+            document.getElementById('userEmail').textContent = userData.email;
+            showNotification('📱 Используем локальные данные');
+        } catch (e) {
+            console.warn('Failed to parse cached user data');
+        }
+    }
+    
+    // Загружаем кэшированные задания если нет соединения
+    if (isOffline) {
+        loadCachedTasks();
+        loadCachedDocuments();
+    }
+}
 
 function initAuthListener() {
     if (!auth) {
@@ -59,12 +87,20 @@ function initAuthListener() {
         console.log('Auth state changed:', user ? user.email : 'No user');
         if (user) {
             currentUser = user;
+            
+            // Сохраняем базовые данные пользователя для оффлайн использования
+            localStorage.setItem('cachedCurrentUser', JSON.stringify({
+                email: user.email,
+                uid: user.uid
+            }));
+            
             showMainMenu();
             loadUserData();
             showNotification(`Добро пожаловать, ${user.email}!`);
         } else {
             currentUser = null;
             userDocuments = [];
+            localStorage.removeItem('cachedCurrentUser');
             showLoginScreen();
         }
     });
@@ -86,11 +122,34 @@ function setupBasicEventListeners() {
         }
     });
     
+    // Обработчики для оффлайн функционала
+    setupOfflineFunctionality();
+}
+
+// Настройка оффлайн функционала
+function setupOfflineFunctionality() {
     // Показываем уведомление, что функционал ограничен
     const menuItems = document.querySelectorAll('.menu-item');
     menuItems.forEach(item => {
         item.addEventListener('click', function() {
-            showNotification('Этот функционал временно недоступен');
+            if (isOffline) {
+                const menuText = this.querySelector('h3').textContent;
+                if (menuText.includes('Задания')) {
+                    showModal('tasksModal');
+                    loadCachedTasks();
+                } else if (menuText.includes('Литература')) {
+                    showModal('literatureModal');
+                    loadCachedDocuments();
+                }
+            } else {
+                // Обычная логика для онлайн режима
+                if (this.id === 'tasksBtn') {
+                    showModal('tasksModal');
+                    loadTasks();
+                } else if (this.id === 'literatureBtn') {
+                    showModal('literatureModal');
+                }
+            }
         });
     });
 }
@@ -114,11 +173,18 @@ function setupEventListeners() {
     // Кнопки меню
     document.getElementById('tasksBtn').addEventListener('click', function() {
         showModal('tasksModal');
-        loadTasks();
+        if (isOffline) {
+            loadCachedTasks();
+        } else {
+            loadTasks();
+        }
     });
     
     document.getElementById('literatureBtn').addEventListener('click', function() {
         showModal('literatureModal');
+        if (isOffline) {
+            loadCachedDocuments();
+        }
     });
     
     // Закрытие модальных окон
@@ -136,15 +202,24 @@ function setupEventListeners() {
     // Инициализация функциональности
     setupTasksFunctionality();
     setupLiteratureFunctionality();
+    setupOfflineFunctionality();
 }
 
 // Проверка доступности Firebase перед использованием
 function checkFirebase() {
     if (!db || !auth) {
         console.error('Firebase not initialized');
-        showNotification('Система временно недоступна');
+        if (!isOffline) {
+            showNotification('Система временно недоступна');
+        }
         return false;
     }
+    
+    if (isOffline) {
+        showNotification('🔌 Оффлайн режим - некоторые функции ограничены');
+        return false;
+    }
+    
     return true;
 }
 
@@ -285,7 +360,10 @@ function setupTasksFunctionality() {
 
 // Загрузка заданий из Firebase
 async function loadTasks() {
-    if (!checkFirebase() || !currentUser) return;
+    if (!checkFirebase() || !currentUser) {
+        loadCachedTasks();
+        return;
+    }
 
     try {
         const tasksList = document.querySelector('.tasks-list');
@@ -296,10 +374,13 @@ async function loadTasks() {
             .orderBy('added', 'desc')
             .get();
 
+        const tasks = [];
         tasksList.innerHTML = '';
 
         if (snapshot.empty) {
             tasksList.innerHTML = '<div style="text-align: center; color: #7f8c8d;">Нет заданий</div>';
+            // Очищаем кэш если нет заданий
+            localStorage.removeItem('cachedTasks');
             return;
         }
 
@@ -308,14 +389,51 @@ async function loadTasks() {
                 id: doc.id,
                 ...doc.data()
             };
+            tasks.push(task);
             const taskElement = createTaskElement(task);
             tasksList.appendChild(taskElement);
         });
 
+        // Сохраняем задания в localStorage для оффлайн использования
+        localStorage.setItem('cachedTasks', JSON.stringify(tasks));
+        
+        showNotification(`📋 Загружено ${tasks.length} заданий`);
+
     } catch (error) {
         console.error('Ошибка загрузки заданий:', error);
-        const tasksList = document.querySelector('.tasks-list');
-        tasksList.innerHTML = '<div style="text-align: center; color: #e74c3c;">Ошибка загрузки заданий</div>';
+        loadCachedTasks();
+    }
+}
+
+// Загрузка кэшированных заданий
+function loadCachedTasks() {
+    const tasksList = document.querySelector('.tasks-list');
+    const cachedTasks = localStorage.getItem('cachedTasks');
+    
+    if (!cachedTasks) {
+        tasksList.innerHTML = '<div style="text-align: center; color: #7f8c8d;">Нет сохраненных заданий для оффлайн просмотра</div>';
+        return;
+    }
+    
+    try {
+        const tasks = JSON.parse(cachedTasks);
+        tasksList.innerHTML = '';
+        
+        if (tasks.length === 0) {
+            tasksList.innerHTML = '<div style="text-align: center; color: #7f8c8d;">Нет заданий</div>';
+            return;
+        }
+        
+        tasks.forEach(task => {
+            const taskElement = createTaskElement(task);
+            tasksList.appendChild(taskElement);
+        });
+        
+        showNotification(`📱 Показаны сохраненные задания (${tasks.length} шт.)`);
+        
+    } catch (error) {
+        console.error('Ошибка загрузки кэшированных заданий:', error);
+        tasksList.innerHTML = '<div style="text-align: center; color: #e74c3c;">Ошибка загрузки локальных данных</div>';
     }
 }
 
@@ -335,8 +453,9 @@ function createTaskElement(task) {
         ${task.lift ? `<p><strong>Лифт:</strong> ${task.lift}</p>` : ''}
         ${task.deadline ? `<p><strong>Срок:</strong> ${task.deadline}</p>` : ''}
         ${task.priority ? `<p><strong>Приоритет:</strong> ${task.priority}</p>` : ''}
+        ${isOffline ? '<p style="color: #e67e22;"><strong>⚠ Оффлайн режим</strong></p>' : ''}
         <div class="task-actions">
-            ${getTaskActions(task.status || 'new')}
+            ${isOffline ? '<button class="btn-task" disabled title="Недоступно в оффлайн режиме">Обновить статус</button>' : getTaskActions(task.status || 'new')}
         </div>
     `;
     
@@ -345,7 +464,10 @@ function createTaskElement(task) {
 
 // Обновление статуса задания в Firebase
 async function updateTaskStatus(taskItem, newStatus) {
-    if (!checkFirebase()) return;
+    if (!checkFirebase()) {
+        showNotification('Недоступно в оффлайн режиме');
+        return;
+    }
 
     const taskId = taskItem.getAttribute('data-task-id');
     const taskTitle = taskItem.querySelector('h3').textContent;
@@ -365,6 +487,9 @@ async function updateTaskStatus(taskItem, newStatus) {
         taskActions.innerHTML = getTaskActions(newStatus);
         
         showNotification(`Статус задания "${taskTitle}" обновлен на "${getStatusText(newStatus)}"`);
+        
+        // Обновляем кэш
+        setTimeout(() => loadTasks(), 1000);
         
     } catch (error) {
         console.error('Ошибка обновления задания:', error);
@@ -403,6 +528,20 @@ function setupLiteratureFunctionality() {
             deleteUserDocument(docId);
         }
     });
+}
+
+// Загрузка кэшированных документов
+function loadCachedDocuments() {
+    const cachedDocs = localStorage.getItem('cachedDocuments');
+    if (cachedDocs) {
+        try {
+            userDocuments = JSON.parse(cachedDocs);
+            displayUserDocuments();
+            showNotification('📚 Загружены сохраненные документы');
+        } catch (error) {
+            console.error('Ошибка загрузки кэшированных документов:', error);
+        }
+    }
 }
 
 // Управление вкладками
@@ -458,7 +597,10 @@ async function addUserDocument() {
 }
 
 async function loadUserDocuments() {
-    if (!checkFirebase() || !currentUser) return;
+    if (!checkFirebase() || !currentUser) {
+        loadCachedDocuments();
+        return;
+    }
 
     const syncStatus = document.getElementById('syncStatus');
     syncStatus.textContent = 'Загрузка документов...';
@@ -481,15 +623,19 @@ async function loadUserDocuments() {
 
         displayUserDocuments();
         
+        // Сохраняем документы для оффлайн использования
+        localStorage.setItem('cachedDocuments', JSON.stringify(userDocuments));
+        
         syncStatus.textContent = `Загружено документов: ${userDocuments.length}`;
         syncStatus.style.background = '#d1edff';
         syncStatus.style.color = '#004085';
         
     } catch (error) {
         console.error('Ошибка загрузки документов:', error);
-        syncStatus.textContent = 'Ошибка загрузки';
-        syncStatus.style.background = '#f8d7da';
-        syncStatus.style.color = '#721c24';
+        loadCachedDocuments();
+        syncStatus.textContent = 'Оффлайн режим - локальные данные';
+        syncStatus.style.background = '#fff3cd';
+        syncStatus.style.color = '#856404';
     }
 }
 
@@ -528,7 +674,7 @@ function displayUserDocuments() {
                     ${doc.name}
                 </a>
                 <div class="doc-actions">
-                    <button class="btn-small btn-delete" title="Удалить">🗑️ Удалить</button>
+                    ${isOffline ? '<span style="color: #e67e22; font-size: 12px;">⚠ Оффлайн</span>' : `<button class="btn-small btn-delete" title="Удалить">🗑️ Удалить</button>`}
                 </div>
             `;
             userDocsList.appendChild(docItem);
@@ -537,7 +683,10 @@ function displayUserDocuments() {
 }
 
 async function deleteUserDocument(docId) {
-    if (!checkFirebase()) return;
+    if (!checkFirebase()) {
+        showNotification('Недоступно в оффлайн режиме');
+        return;
+    }
     if (!confirm('Удалить документ?')) return;
 
     try {
@@ -551,7 +700,10 @@ async function deleteUserDocument(docId) {
 }
 
 async function clearUserDocuments() {
-    if (!checkFirebase()) return;
+    if (!checkFirebase()) {
+        showNotification('Недоступно в оффлайн режиме');
+        return;
+    }
     if (!confirm('Удалить ВСЕ ваши документы? Это действие нельзя отменить.')) return;
 
     try {
@@ -749,15 +901,21 @@ if ('serviceWorker' in navigator) {
 
         window.addEventListener('online', function() {
             console.log('Соединение восстановлено');
+            isOffline = false;
             showNotification('✅ Соединение восстановлено');
             if (currentUser) {
                 loadUserDocuments();
+                // Автоматически обновляем задания если открыто модальное окно
+                if (document.getElementById('tasksModal').style.display === 'block') {
+                    setTimeout(() => loadTasks(), 1000);
+                }
             }
             updateOnlineStatus(true);
         });
 
         window.addEventListener('offline', function() {
             console.log('Режим оффлайн');
+            isOffline = true;
             showNotification('🔌 Режим оффлайн - используются кэшированные данные');
             updateOnlineStatus(false);
         });
@@ -765,6 +923,7 @@ if ('serviceWorker' in navigator) {
 }
 
 function updateOnlineStatus(isOnline) {
+    isOffline = !isOnline;
     const statusElement = document.getElementById('syncStatus');
     if (statusElement) {
         if (isOnline) {
@@ -772,9 +931,9 @@ function updateOnlineStatus(isOnline) {
             statusElement.style.background = '#d4edda';
             statusElement.style.color = '#155724';
         } else {
-            statusElement.innerHTML = '🔴 Оффлайн';
-            statusElement.style.background = '#f8d7da';
-            statusElement.style.color = '#721c24';
+            statusElement.innerHTML = '🔴 Оффлайн - локальные данные';
+            statusElement.style.background = '#fff3cd';
+            statusElement.style.color = '#856404';
         }
     }
 }
@@ -794,7 +953,8 @@ window.getAuthStatus = function() {
         currentUser: currentUser,
         isLoggedIn: !!currentUser,
         userDocuments: userDocuments,
-        firebaseReady: !!(db && auth)
+        firebaseReady: !!(db && auth),
+        isOffline: isOffline
     };
 };
 
@@ -830,4 +990,4 @@ window.addTestTask = function() {
         });
 };
 
-console.log('Приложение v2.4 инициализировано с улучшенной обработкой ошибок');
+console.log('Приложение v2.5 инициализировано с улучшенной оффлайн поддержкой');
