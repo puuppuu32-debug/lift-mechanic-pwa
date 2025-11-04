@@ -1,46 +1,60 @@
-// Конфигурация Firebase
-const firebaseConfig = {
-    apiKey: "AIzaSyDQd5RZyQAyOoI6Qzu6aCuQOxWSUQOVOxM",
-    authDomain: "lift-mechanic-pwa.firebaseapp.com",
-    projectId: "lift-mechanic-pwa",
-    storageBucket: "lift-mechanic-pwa.firebasestorage.app",
-    messagingSenderId: "504828099853",
-    appId: "1:504828099853:web:6af96c6d3c79afa0930444",
-    measurementId: "G-T5J495YEL8"
+// app.js v2.3 - Lazy Firebase initialization
+console.log('App version 2.3 - Lazy Firebase load');
+
+// Делаем функцию инициализации глобальной для вызова из index.html
+window.initApp = function() {
+    console.log('Initializing Firebase and application...');
+    
+    // Конфигурация Firebase
+    const firebaseConfig = {
+        apiKey: "AIzaSyDQd5RZyQAyOoI6Qzu6aCuQOxWSUQOVOxM",
+        authDomain: "lift-mechanic-pwa.firebaseapp.com",
+        projectId: "lift-mechanic-pwa",
+        storageBucket: "lift-mechanic-pwa.firebasestorage.app",
+        messagingSenderId: "504828099853",
+        appId: "1:504828099853:web:6af96c6d3c79afa0930444",
+        measurementId: "G-T5J495YEL8"
+    };
+
+    try {
+        // Инициализируем Firebase
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        const auth = firebase.auth();
+        
+        console.log('✅ Firebase initialized successfully');
+        
+        // Запускаем основную логику приложения
+        initAuthListener(auth, db);
+        setupEventListeners();
+        
+    } catch (error) {
+        console.error('❌ Firebase init error:', error);
+        showNotification('Ошибка инициализации приложения');
+    }
 };
 
-// Инициализация Firebase
-firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore();
-const auth = firebase.auth();
-
-// Глобальные переменные
-let currentUser = null;
-let userDocuments = [];
-
-document.addEventListener('DOMContentLoaded', function() {
-    initApp();
-});
-
-function initApp() {
-    // Слушатель изменения состояния аутентификации
+// Функция для слушателя аутентификации
+function initAuthListener(auth, db) {
     auth.onAuthStateChanged(function(user) {
+        console.log('Auth state changed:', user ? user.email : 'No user');
         if (user) {
-            // Пользователь вошел
             currentUser = user;
             showMainMenu();
             loadUserData();
             showNotification(`Добро пожаловать, ${user.email}!`);
         } else {
-            // Пользователь вышел
             currentUser = null;
             userDocuments = [];
             showLoginScreen();
         }
     });
+}
 
-    setupEventListeners();
-    initNewFeatures();
+// Если Firebase уже загружен к моменту выполнения этого скрипта
+if (typeof firebase !== 'undefined' && typeof firebase.initializeApp !== 'undefined') {
+    console.log('Firebase already loaded, initializing immediately...');
+    window.initApp();
 }
 
 function setupEventListeners() {

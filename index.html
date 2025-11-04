@@ -4,12 +4,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Электромеханик по лифтам</title>
-    <link rel="stylesheet" href="style.css">
-    <link rel="manifest" href="manifest.json">
+    
+    <!-- Только самые важные meta-теги -->
     <meta name="theme-color" content="#2c3e50">
+    <meta name="description" content="Приложение для электромехаников по обслуживанию лифтов">
+    
+    <!-- Только preconnect без preload -->
+    <link rel="preconnect" href="https://www.gstatic.com">
+    
+    <!-- Обычная загрузка CSS -->
+    <link rel="stylesheet" href="style.css">
+    
+    <link rel="manifest" href="manifest.json">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛠️</text></svg>">
     
-    <!-- Firebase SDK -->
+    <!-- Firebase SDK (оставляем рабочую версию) -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
@@ -77,6 +86,9 @@
                 </div>
                 
                 <div class="tasks-list">
+                    <div id="tasksLoading" style="text-align: center; color: #7f8c8d;">
+                        Загрузка заданий...
+                    </div>
                     <!-- Задания будут загружаться из Firebase -->
                 </div>
             </div>
@@ -107,18 +119,18 @@
                         <div class="category-item">
                             <h3>📖 Нормативные документы</h3>
                             <ul class="docs-list">
-                                <li><a href="http://mos.gosnadzor.ru/about/documents/%D0%A2%D0%A0%20%D0%A2%D0%A1%200112011%20%D0%91%D0%B5%D0%B7%D0%BE%D0%BF%D0%B0%D1%81%D0%BD%D0%BE%D1%81%D1%82%D1%8C%20%D0%BB%D0%B8%D1%84%D1%82%D0%BE%D0%B2.pdf" target="_blank">Технический регламент ТР ТС 011/2011</a></li>
-                                <li><a href="http://mos.gosnadzor.ru/activity/control/gruz/%D0%9F%D0%BE%D1%81%D1%82%D0%B0%D0%BD%D0%BE%D0%B2%D0%BB%D0%B5%D0%BD%D0%B8%D0%B5%20%D0%9F%D1%80%D0%B0%D0%B2%D0%B8%D1%82%D0%B5%D0%BB%D1%8C%D1%81%D1%82%D0%B2%D0%B0%20%D0%A0%D0%A4%20%D0%BE%D1%82%2020.10.2023%20N%201744.pdf" target="_blank">ПОСТАНОВЛЕНИЕ от 20 октября 2023 г. N 1744</a></li>
-                                <li><a href="https://rosgosts.ru/file/gost/91/140/gost_r_55964-2014.pdf" target="_blank">ГОСТ Р 55964-2014 Лифты пассажирские</a></li>
+                                <li><a href="https://www.fkr-spb.ru/upload/iblock/1c7/ppkbjcvn2htnuz1ajf9ei7rk1rfnneis.pdf" target="_blank">Технический регламент ТР ТС 011/2011</a></li>
+                                <li><a href="http://static.government.ru/media/files/SoNVNKLZ2H2AjqKHE6vRi6UXpAazxMWp.pdf" target="_blank">Постановление Правительства РФ от 24 июня 2017 г. N 743</a></li>
+                                <li><a href="https://protect.gost.ru/v.aspx?control=8&baseC=6&page=0&month=3&year=2023&search=Р%2055964-2014&RegNum=1&DocOnPageCount=15&id=173021&pageK=5651C111-508A-4A6A-A61E-5A2C195BC5A8" target="_blank">ГОСТ Р 55964-2014 Лифты пассажирские</a></li>
                             </ul>
                         </div>
                         
                         <div class="category-item">
                             <h3>🔧 Инструкции по эксплуатации</h3>
                             <ul class="docs-list">
-                                <li><a href="https://www.liftmach.by/upload/iblock/%D0%9B%D0%9F-0263%D0%91-01.pdf" target="_blank">Лифт ЛП-0263Б-01 - руководство по эксплуатации</a></li>
-                                <li><a href="https://kls.ooo/wp-content/uploads/2023/08/%D0%98%D0%BD%D1%81%D1%82%D1%80%D1%83%D0%BA%D1%86%D0%B8%D1%8F-%D0%BF%D0%BE-%D1%8D%D0%BA%D1%81%D0%BF%D0%BB%D1%83%D0%B0%D1%82%D0%B0%D1%86%D0%B8%D0%B8-Otis-Gen-2.pdf" target="_blank">OTIS Gen2 - техническое описание</a></li>
-                                <li><a href="https://kls.ooo/wp-content/uploads/2024/01/%D0%98%D0%BD%D1%81%D1%82%D1%80%D1%83%D0%BA%D1%86%D0%B8%D1%8F-%D0%BF%D0%BE-%D0%BE%D0%B1%D1%81%D0%BB%D1%83%D0%B6%D0%B8%D0%B2%D0%B0%D0%BD%D0%B8%D1%8E-Shindler-3300-5300.pdf" target="_blank">Schindler 3300 - монтаж и обслуживание</a></li>
+                                <li><a href="http://etel-nt.com/wp-content/uploads/2014/02/PG-01.06.001_RU.pdf" target="_blank">KONE - руководства по эксплуатации</a></li>
+                                <li><a href="https://www.lift-jkx.ru/images/files/documents/re/re-2000r-otis.pdf" target="_blank">OTIS - технические описания</a></li>
+                                <li><a href="https://kls.ooo/wp-content/uploads/2024/01/%D0%98%D0%BD%D1%81%D1%82%D1%80%D1%83%D0%BA%D1%86%D0%B8%D1%8F-%D0%BF%D0%BE-%D0%BE%D0%B1%D1%81%D0%BB%D1%83%D0%B6%D0%B8%D0%B2%D0%B0%D0%BD%D0%B8%D1%8E-Shindler-3300-5300.pdf" target="_blank">Schindler - техническая документация</a></li>
                             </ul>
                         </div>
 
@@ -169,6 +181,54 @@
         </div>
     </div>
 
+    <script>
+        // Отложенная инициализация Firebase
+        window.addEventListener('load', function() {
+            console.log('Page loaded, initializing Firebase...');
+            
+            // Даем странице отрисоваться перед полной инициализацией
+            setTimeout(() => {
+                if (typeof firebase !== 'undefined') {
+                    console.log('Firebase loaded, starting app...');
+                    // Вызываем инициализацию приложения
+                    if (window.initApp) {
+                        window.initApp();
+                    }
+                } else {
+                    console.error('Firebase not loaded');
+                }
+            }, 100);
+        });
+
+        // Показываем интерфейс входа сразу при загрузке DOM
+        window.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM loaded, showing login screen...');
+            const loginScreen = document.getElementById('loginScreen');
+            if (loginScreen) {
+                loginScreen.classList.add('active');
+            }
+        });
+
+        // Принудительное обновление Service Worker
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                for(let registration of registrations) {
+                    registration.unregister();
+                    console.log('Service Worker unregistered');
+                }
+            });
+            
+            window.addEventListener('load', function() {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(function(registration) {
+                        console.log('Service Worker successfully registered');
+                    })
+                    .catch(function(error) {
+                        console.log('Service Worker registration failed:', error);
+                    });
+            });
+        }
+    </script>
     <script src="app.js"></script>
 </body>
 </html>
