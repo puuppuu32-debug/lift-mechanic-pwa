@@ -1,80 +1,49 @@
-// sw.js v2 - Optimized caching
-const CACHE_NAME = 'lift-mechanic-v4';
-const STATIC_CACHE = 'static-assets-v4';
-
-// Critical assets for App Shell
-const staticAssets = [
-  '/',
-  '/index.html',
-  '/style.css',
-  '/app.js',
-  '/manifest.json',
-  '/offline.html'
-];
+// sw.js v3 - Simple and reliable
+const CACHE_NAME = 'lift-mechanic-simple-v1';
 
 self.addEventListener('install', (event) => {
-  console.log('Service Worker: Installing v4...');
-  self.skipWaiting(); // Immediate activation
-  
-  event.waitUntil(
-    caches.open(STATIC_CACHE)
-      .then((cache) => {
-        console.log('Service Worker: Caching App Shell');
-        return cache.addAll(staticAssets);
-      })
-  );
+  console.log('Service Worker: Installing simple version');
+  self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
-  console.log('Service Worker: Activated v4');
-  event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cache) => {
-          if (cache !== STATIC_CACHE) {
-            console.log('Service Worker: Removing old cache', cache);
-            return caches.delete(cache);
-          }
-        })
-      );
-    }).then(() => self.clients.claim())
-  );
+  console.log('Service Worker: Activated simple version');
+  event.waitUntil(self.clients.claim());
 });
 
-// Simple cache-first strategy for better performance
 self.addEventListener('fetch', (event) => {
-  if (event.request.method !== 'GET') return;
-  
-  event.respondWith(
-    caches.match(event.request)
-      .then((cachedResponse) => {
-        // Return cached version if available
-        if (cachedResponse) {
-          return cachedResponse;
-        }
-        
-        // Otherwise fetch from network
-        return fetch(event.request)
-          .then((networkResponse) => {
-            // Cache successful requests (excluding Firebase APIs)
-            if (networkResponse.ok && 
-                !event.request.url.includes('firestore.googleapis.com') &&
-                !event.request.url.includes('firebaseio.com')) {
-              const responseClone = networkResponse.clone();
-              caches.open(STATIC_CACHE)
-                .then((cache) => {
-                  cache.put(event.request, responseClone);
+  // Пропускаем все Firebase запросы и не-GET запросы
+  if (event.request.method !== 'GET' || 
+      event.request.url.includes('firestore.googleapis.com') ||
+      event.request.url.includes('firebaseio.com') ||
+      event.request.url.includes('googleapis.com')) {
+    return;
+  }
+
+  // Только для статических ресурсов нашего приложения
+  if (event.request.url.includes('/style.css') ||
+      event.request.url.includes('/app.js') ||
+      event.request.url.includes('/manifest.json')) {
+    
+    event.respondWith(
+      caches.open(CACHE_NAME)
+        .then((cache) => {
+          return cache.match(event.request)
+            .then((cachedResponse) => {
+              if (cachedResponse) {
+                return cachedResponse;
+              }
+              
+              return fetch(event.request)
+                .then((networkResponse) => {
+                  cache.put(event.request, networkResponse.clone());
+                  return networkResponse;
+                })
+                .catch(() => {
+                  return new Response('Offline');
                 });
-            }
-            return networkResponse;
-          })
-          .catch(() => {
-            // Fallback for navigation requests
-            if (event.request.mode === 'navigate') {
-              return caches.match('/offline.html');
-            }
-            return new Response('Offline');
-          });
-      })
-  );
+            });
+        })
+    );
+  }
 });
