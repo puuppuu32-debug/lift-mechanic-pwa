@@ -1,5 +1,11 @@
-// app.js v2 - Using collections: tasks_pwa and documents_pwa
-console.log('App version 2.0 - Using collections: tasks_pwa and documents_pwa');
+// app.js v2.4 - Fixed db undefined error
+console.log('App version 2.4 - Fixed Firebase initialization');
+
+// Глобальные переменные
+let currentUser = null;
+let userDocuments = [];
+let db = null;
+let auth = null;
 
 // Конфигурация Firebase
 const firebaseConfig = {
@@ -12,40 +18,84 @@ const firebaseConfig = {
     measurementId: "G-T5J495YEL8"
 };
 
-// Инициализация Firebase
-firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore();
-const auth = firebase.auth();
+// Глобальная функция инициализации
+window.initApp = function() {
+    console.log('Initializing Firebase application...');
+    
+    try {
+        // Проверяем доступность Firebase
+        if (typeof firebase === 'undefined') {
+            throw new Error('Firebase SDK not available');
+        }
 
-// Глобальные переменные
-let currentUser = null;
-let userDocuments = [];
+        // Инициализируем Firebase
+        const firebaseApp = firebase.initializeApp(firebaseConfig);
+        db = firebase.firestore();
+        auth = firebase.auth();
+        
+        console.log('✅ Firebase initialized successfully');
+        console.log('📊 Firestore:', db ? 'ready' : 'not ready');
+        console.log('🔐 Auth:', auth ? 'ready' : 'not ready');
+        
+        // Запускаем основную логику приложения
+        initAuthListener();
+        setupEventListeners();
+        
+    } catch (error) {
+        console.error('❌ Firebase initialization failed:', error);
+        showNotification('Приложение загружено в ограниченном режиме');
+        // Все равно настраиваем обработчики для базового функционала
+        setupBasicEventListeners();
+    }
+};
 
-document.addEventListener('DOMContentLoaded', function() {
-    initApp();
-});
-
-function initApp() {
-    // Слушатель изменения состояния аутентификации
+function initAuthListener() {
+    if (!auth) {
+        console.warn('Auth not available, skipping auth listener');
+        return;
+    }
+    
     auth.onAuthStateChanged(function(user) {
+        console.log('Auth state changed:', user ? user.email : 'No user');
         if (user) {
-            // Пользователь вошел
             currentUser = user;
             showMainMenu();
             loadUserData();
             showNotification(`Добро пожаловать, ${user.email}!`);
         } else {
-            // Пользователь вышел
             currentUser = null;
             userDocuments = [];
             showLoginScreen();
         }
     });
-
-    setupEventListeners();
-    initNewFeatures();
 }
 
+// Базовая настройка обработчиков (без Firebase)
+function setupBasicEventListeners() {
+    console.log('Setting up basic event listeners');
+    
+    // Закрытие модальных окон
+    document.querySelectorAll('.close').forEach(closeBtn => {
+        closeBtn.addEventListener('click', closeModals);
+    });
+    
+    // Закрытие по клику вне окна
+    window.addEventListener('click', function(e) {
+        if (e.target.classList.contains('modal')) {
+            closeModals();
+        }
+    });
+    
+    // Показываем уведомление, что функционал ограничен
+    const menuItems = document.querySelectorAll('.menu-item');
+    menuItems.forEach(item => {
+        item.addEventListener('click', function() {
+            showNotification('Этот функционал временно недоступен');
+        });
+    });
+}
+
+// Основная настройка обработчиков событий
 function setupEventListeners() {
     // Форма входа
     document.getElementById('loginForm').addEventListener('submit', function(e) {
@@ -64,7 +114,7 @@ function setupEventListeners() {
     // Кнопки меню
     document.getElementById('tasksBtn').addEventListener('click', function() {
         showModal('tasksModal');
-        loadTasks(); // Загружаем задания из Firebase
+        loadTasks();
     });
     
     document.getElementById('literatureBtn').addEventListener('click', function() {
@@ -82,15 +132,26 @@ function setupEventListeners() {
             closeModals();
         }
     });
-}
-
-function initNewFeatures() {
+    
+    // Инициализация функциональности
     setupTasksFunctionality();
     setupLiteratureFunctionality();
 }
 
+// Проверка доступности Firebase перед использованием
+function checkFirebase() {
+    if (!db || !auth) {
+        console.error('Firebase not initialized');
+        showNotification('Система временно недоступна');
+        return false;
+    }
+    return true;
+}
+
 // Аутентификация - ВХОД
 async function handleLogin() {
+    if (!checkFirebase()) return;
+
     const email = document.getElementById('username').value;
     const password = document.getElementById('password').value;
     const authStatus = document.getElementById('authStatus');
@@ -124,6 +185,8 @@ async function handleLogin() {
 
 // Аутентификация - РЕГИСТРАЦИЯ
 async function handleRegister() {
+    if (!checkFirebase()) return;
+
     const email = document.getElementById('username').value;
     const password = document.getElementById('password').value;
     const authStatus = document.getElementById('authStatus');
@@ -154,7 +217,6 @@ async function handleRegister() {
     try {
         await auth.createUserWithEmailAndPassword(email, password);
         showNotification('Аккаунт успешно создан!');
-        // Успешная регистрация автоматически выполняет вход
     } catch (error) {
         console.log('Ошибка регистрации:', error.code);
         
@@ -172,6 +234,7 @@ async function handleRegister() {
 }
 
 function handleLogout() {
+    if (!auth) return;
     auth.signOut();
     showNotification('Вы вышли из системы');
 }
@@ -222,13 +285,12 @@ function setupTasksFunctionality() {
 
 // Загрузка заданий из Firebase
 async function loadTasks() {
-    if (!currentUser) return;
+    if (!checkFirebase() || !currentUser) return;
 
     try {
         const tasksList = document.querySelector('.tasks-list');
         tasksList.innerHTML = '<div style="text-align: center; color: #7f8c8d;">Загрузка заданий...</div>';
 
-        // Загружаем задания из коллекции tasks_pwa
         const snapshot = await db.collection('tasks_pwa')
             .where('userId', '==', currentUser.uid)
             .orderBy('added', 'desc')
@@ -283,17 +345,17 @@ function createTaskElement(task) {
 
 // Обновление статуса задания в Firebase
 async function updateTaskStatus(taskItem, newStatus) {
+    if (!checkFirebase()) return;
+
     const taskId = taskItem.getAttribute('data-task-id');
     const taskTitle = taskItem.querySelector('h3').textContent;
     
     try {
-        // Обновляем в Firebase
         await db.collection('tasks_pwa').doc(taskId).update({
             status: newStatus,
             updated: new Date().toISOString()
         });
 
-        // Обновляем локально
         const statusElement = taskItem.querySelector('.task-status');
         const taskActions = taskItem.querySelector('.task-actions');
         
@@ -352,9 +414,9 @@ function switchTab(tabName) {
     document.getElementById(`${tabName}-tab`).classList.add('active');
 }
 
-// Работа с документами в Firestore (коллекция documents_pwa)
+// Работа с документами в Firestore
 async function addUserDocument() {
-    if (!currentUser) {
+    if (!checkFirebase() || !currentUser) {
         showNotification('Сначала войдите в систему');
         return;
     }
@@ -388,7 +450,7 @@ async function addUserDocument() {
         showNotification(`Документ "${docName}" добавлен`);
         document.getElementById('addDocForm').reset();
         switchTab('library');
-        await loadUserDocuments(); // Перезагружаем список
+        await loadUserDocuments();
     } catch (error) {
         console.error('Ошибка добавления документа:', error);
         showNotification('Ошибка при добавлении документа');
@@ -396,7 +458,7 @@ async function addUserDocument() {
 }
 
 async function loadUserDocuments() {
-    if (!currentUser) return;
+    if (!checkFirebase() || !currentUser) return;
 
     const syncStatus = document.getElementById('syncStatus');
     syncStatus.textContent = 'Загрузка документов...';
@@ -475,12 +537,13 @@ function displayUserDocuments() {
 }
 
 async function deleteUserDocument(docId) {
+    if (!checkFirebase()) return;
     if (!confirm('Удалить документ?')) return;
 
     try {
         await db.collection('documents_pwa').doc(docId).delete();
         showNotification('Документ удален');
-        await loadUserDocuments(); // Перезагружаем список
+        await loadUserDocuments();
     } catch (error) {
         console.error('Ошибка удаления документа:', error);
         showNotification('Ошибка при удалении документа');
@@ -488,6 +551,7 @@ async function deleteUserDocument(docId) {
 }
 
 async function clearUserDocuments() {
+    if (!checkFirebase()) return;
     if (!confirm('Удалить ВСЕ ваши документы? Это действие нельзя отменить.')) return;
 
     try {
@@ -672,39 +736,22 @@ function closeModals() {
     });
 }
 
-// PWA функциональность с оффлайн-режимом
+// PWA функциональность
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', function() {
         navigator.serviceWorker.register('/sw.js')
             .then(function(registration) {
-                console.log('ServiceWorker v3 зарегистрирован успешно: ', registration.scope);
-                
-                // Проверка обновлений
-                registration.addEventListener('updatefound', () => {
-                    const newWorker = registration.installing;
-                    console.log('Обнаружена новая версия Service Worker v3');
-                    newWorker.addEventListener('statechange', () => {
-                        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                            showNotification('Доступно обновление приложения. Перезагрузите страницу.');
-                        }
-                    });
-                });
+                console.log('ServiceWorker зарегистрирован успешно: ', registration.scope);
             })
             .catch(function(error) {
                 console.log('Ошибка регистрации ServiceWorker: ', error);
             });
 
-        // Слушатель изменения онлайн-статуса
         window.addEventListener('online', function() {
             console.log('Соединение восстановлено');
             showNotification('✅ Соединение восстановлено');
-            // При восстановлении соединения можно синхронизировать данные
             if (currentUser) {
                 loadUserDocuments();
-                // Можно также перезагрузить задания, если модальное окно открыто
-                if (document.getElementById('tasksModal').style.display === 'block') {
-                    loadTasks();
-                }
             }
             updateOnlineStatus(true);
         });
@@ -717,7 +764,6 @@ if ('serviceWorker' in navigator) {
     });
 }
 
-// Функция для обновления отображения онлайн-статуса
 function updateOnlineStatus(isOnline) {
     const statusElement = document.getElementById('syncStatus');
     if (statusElement) {
@@ -733,16 +779,11 @@ function updateOnlineStatus(isOnline) {
     }
 }
 
-// Проверяем статус при загрузке
-document.addEventListener('DOMContentLoaded', function() {
-    updateOnlineStatus(navigator.onLine);
-});
-
 // Утилиты для отладки
 window.clearAppData = function() {
     if (confirm('Очистить все данные приложения?')) {
         localStorage.clear();
-        auth.signOut();
+        if (auth) auth.signOut();
         showNotification('Все данные очищены');
         setTimeout(() => location.reload(), 1000);
     }
@@ -752,13 +793,14 @@ window.getAuthStatus = function() {
     return {
         currentUser: currentUser,
         isLoggedIn: !!currentUser,
-        userDocuments: userDocuments
+        userDocuments: userDocuments,
+        firebaseReady: !!(db && auth)
     };
 };
 
 // Функция для добавления тестового задания
 window.addTestTask = function() {
-    if (!currentUser) {
+    if (!checkFirebase() || !currentUser) {
         showNotification('Сначала войдите в систему');
         return;
     }
@@ -779,7 +821,7 @@ window.addTestTask = function() {
         .then(() => {
             showNotification('Тестовое задание добавлено');
             if (document.getElementById('tasksModal').style.display === 'block') {
-                loadTasks(); // Перезагружаем список, если модальное окно открыто
+                loadTasks();
             }
         })
         .catch(error => {
@@ -788,4 +830,4 @@ window.addTestTask = function() {
         });
 };
 
-console.log('Приложение v2.0 инициализировано с Firebase и оффлайн-режимом');
+console.log('Приложение v2.4 инициализировано с улучшенной обработкой ошибок');
