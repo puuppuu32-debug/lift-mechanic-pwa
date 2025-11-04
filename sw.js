@@ -1,18 +1,32 @@
-// sw.js v3 - Simple and reliable
-const CACHE_NAME = 'lift-mechanic-simple-v1';
+// sw.js v4 - Enhanced offline support
+const CACHE_NAME = 'lift-mechanic-enhanced-v1';
+const OFFLINE_URL = '/offline.html';
 
 self.addEventListener('install', (event) => {
-  console.log('Service Worker: Installing simple version');
-  self.skipWaiting();
+  console.log('Service Worker: Installing with enhanced caching');
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then((cache) => {
+        // Кэшируем КРИТИЧЕСКИЕ ресурсы для оффлайн работы
+        return cache.addAll([
+          '/',
+          '/offline.html',
+          '/style.css', 
+          '/app.js',
+          '/manifest.json'
+        ]);
+      })
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', (event) => {
-  console.log('Service Worker: Activated simple version');
+  console.log('Service Worker: Activated enhanced version');
   event.waitUntil(self.clients.claim());
 });
 
 self.addEventListener('fetch', (event) => {
-  // Пропускаем все Firebase запросы и не-GET запросы
+  // Пропускаем Firebase запросы и не-GET
   if (event.request.method !== 'GET' || 
       event.request.url.includes('firestore.googleapis.com') ||
       event.request.url.includes('firebaseio.com') ||
@@ -20,30 +34,37 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Только для статических ресурсов нашего приложения
-  if (event.request.url.includes('/style.css') ||
-      event.request.url.includes('/app.js') ||
-      event.request.url.includes('/manifest.json')) {
-    
+  // Для навигационных запросов (HTML страниц)
+  if (event.request.mode === 'navigate') {
     event.respondWith(
-      caches.open(CACHE_NAME)
-        .then((cache) => {
-          return cache.match(event.request)
-            .then((cachedResponse) => {
-              if (cachedResponse) {
-                return cachedResponse;
-              }
-              
-              return fetch(event.request)
-                .then((networkResponse) => {
-                  cache.put(event.request, networkResponse.clone());
-                  return networkResponse;
-                })
-                .catch(() => {
-                  return new Response('Offline');
-                });
-            });
+      fetch(event.request)
+        .catch(() => {
+          // При ошибке сети возвращаем оффлайн страницу
+          return caches.match(OFFLINE_URL);
         })
     );
+    return;
   }
+
+  // Для статических ресурсов
+  event.respondWith(
+    caches.open(CACHE_NAME)
+      .then((cache) => {
+        return cache.match(event.request)
+          .then((cachedResponse) => {
+            if (cachedResponse) {
+              return cachedResponse;
+            }
+            
+            return fetch(event.request)
+              .then((networkResponse) => {
+                cache.put(event.request, networkResponse.clone());
+                return networkResponse;
+              })
+              .catch(() => {
+                return new Response('Offline resource');
+              });
+          });
+      })
+  );
 });
