@@ -5,11 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Электромеханик по лифтам</title>
     
-    <!-- Только самые важные meta-теги -->
+    <!-- Минимальные meta-теги -->
     <meta name="theme-color" content="#2c3e50">
     <meta name="description" content="Приложение для электромехаников по обслуживанию лифтов">
     
-    <!-- Только preconnect без preload -->
+    <!-- Preconnect для ускорения загрузки Firebase -->
     <link rel="preconnect" href="https://www.gstatic.com">
     
     <!-- Обычная загрузка CSS -->
@@ -17,11 +17,6 @@
     
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛠️</text></svg>">
-    
-    <!-- Firebase SDK (оставляем рабочую версию) -->
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 </head>
 <body>
     <!-- Экран авторизации -->
@@ -89,7 +84,6 @@
                     <div id="tasksLoading" style="text-align: center; color: #7f8c8d;">
                         Загрузка заданий...
                     </div>
-                    <!-- Задания будут загружаться из Firebase -->
                 </div>
             </div>
         </div>
@@ -103,13 +97,11 @@
                 <span class="close">&times;</span>
             </div>
             <div class="modal-body">
-                <!-- Вкладки -->
                 <div class="tabs">
                     <button class="tab-btn active" data-tab="library">Библиотека</button>
                     <button class="tab-btn" data-tab="add-doc">Добавить документ</button>
                 </div>
 
-                <!-- Вкладка библиотеки -->
                 <div id="library-tab" class="tab-content active">
                     <div class="docs-search">
                         <input type="text" id="searchDocs" placeholder="Поиск документов..." class="search-input">
@@ -134,20 +126,16 @@
                             </ul>
                         </div>
 
-                        <!-- Пользовательские документы -->
                         <div class="category-item" id="user-docs-section">
                             <h3>📁 Мои документы</h3>
                             <div id="syncStatus" style="margin-bottom: 15px; padding: 8px; border-radius: 5px; background: #f8f9fa; text-align: center; font-size: 14px; color: #7f8c8d;">
                                 Загрузка...
                             </div>
-                            <ul class="docs-list" id="user-docs-list">
-                                <!-- Документы будут загружаться из Firebase -->
-                            </ul>
+                            <ul class="docs-list" id="user-docs-list"></ul>
                         </div>
                     </div>
                 </div>
 
-                <!-- Вкладка добавления документа -->
                 <div id="add-doc-tab" class="tab-content">
                     <form id="addDocForm" class="doc-form">
                         <div class="form-group">
@@ -181,47 +169,42 @@
         </div>
     </div>
 
-    <script>
-        // Отложенная инициализация Firebase
-        window.addEventListener('load', function() {
-            console.log('Page loaded, initializing Firebase...');
-            
-            // Даем странице отрисоваться перед полной инициализацией
-            setTimeout(() => {
-                if (typeof firebase !== 'undefined') {
-                    console.log('Firebase loaded, starting app...');
-                    // Вызываем инициализацию приложения
-                    if (window.initApp) {
-                        window.initApp();
-                    }
-                } else {
-                    console.error('Firebase not loaded');
-                }
-            }, 100);
-        });
+    <!-- Firebase SDK загружается в самом конце -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 
-        // Показываем интерфейс входа сразу при загрузке DOM
-        window.addEventListener('DOMContentLoaded', function() {
-            console.log('DOM loaded, showing login screen...');
+    <script>
+        // Показываем интерфейс сразу при загрузке DOM
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM loaded, showing login screen immediately');
             const loginScreen = document.getElementById('loginScreen');
             if (loginScreen) {
                 loginScreen.classList.add('active');
             }
         });
 
-        // Принудительное обновление Service Worker
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.getRegistrations().then(function(registrations) {
-                for(let registration of registrations) {
-                    registration.unregister();
-                    console.log('Service Worker unregistered');
-                }
-            });
+        // Инициализация Firebase после полной загрузки страницы
+        window.addEventListener('load', function() {
+            console.log('Page fully loaded, initializing Firebase...');
             
+            // Даем визуальному рендерингу приоритет
+            setTimeout(() => {
+                if (typeof firebase !== 'undefined') {
+                    console.log('Firebase SDK loaded, initializing app...');
+                    if (window.initApp) {
+                        window.initApp();
+                    }
+                }
+            }, 0); // Минимальная задержка
+        });
+
+        // Service Worker регистрация
+        if ('serviceWorker' in navigator) {
             window.addEventListener('load', function() {
                 navigator.serviceWorker.register('/sw.js')
                     .then(function(registration) {
-                        console.log('Service Worker successfully registered');
+                        console.log('Service Worker registered');
                     })
                     .catch(function(error) {
                         console.log('Service Worker registration failed:', error);
@@ -229,6 +212,7 @@
             });
         }
     </script>
+    
     <script src="app.js"></script>
 </body>
 </html>
