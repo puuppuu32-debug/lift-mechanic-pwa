@@ -1,178 +1,80 @@
-// sw.js
-const CACHE_NAME = 'lift-mechanic-v2';
-const STATIC_CACHE = 'static-assets-v2';
-const DYNAMIC_CACHE = 'dynamic-assets-v2';
+// sw.js v2 - Optimized caching
+const CACHE_NAME = 'lift-mechanic-v4';
+const STATIC_CACHE = 'static-assets-v4';
 
-// Файлы для предварительного кэширования (App Shell)
+// Critical assets for App Shell
 const staticAssets = [
   '/',
   '/index.html',
   '/style.css',
   '/app.js',
   '/manifest.json',
-  '/sw.js'
+  '/offline.html'
 ];
 
-// Установка и предварительное кэширование
 self.addEventListener('install', (event) => {
-  console.log('Service Worker: Installing...');
+  console.log('Service Worker: Installing v4...');
+  self.skipWaiting(); // Immediate activation
+  
   event.waitUntil(
     caches.open(STATIC_CACHE)
       .then((cache) => {
-        console.log('Service Worker: Caching Static Assets');
+        console.log('Service Worker: Caching App Shell');
         return cache.addAll(staticAssets);
       })
-      .then(() => self.skipWaiting())
   );
 });
 
-// Активация и очистка старых кэшей
 self.addEventListener('activate', (event) => {
-  console.log('Service Worker: Activated');
+  console.log('Service Worker: Activated v4');
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.map((cache) => {
-          if (cache !== STATIC_CACHE && cache !== DYNAMIC_CACHE) {
-            console.log('Service Worker: Clearing Old Cache');
+          if (cache !== STATIC_CACHE) {
+            console.log('Service Worker: Removing old cache', cache);
             return caches.delete(cache);
           }
         })
       );
-    })
+    }).then(() => self.clients.claim())
   );
-  return self.clients.claim();
 });
 
-// Перехват запросов
+// Simple cache-first strategy for better performance
 self.addEventListener('fetch', (event) => {
-  // Пропускаем не-GET запросы и запросы к Firebase
-  if (event.request.method !== 'GET' || 
-      event.request.url.includes('firestore.googleapis.com') ||
-      event.request.url.includes('firebaseio.com')) {
-    return;
-  }
-
+  if (event.request.method !== 'GET') return;
+  
   event.respondWith(
-    (async () => {
-      try {
-        const cachedResponse = await caches.match(event.request);
+    caches.match(event.request)
+      .then((cachedResponse) => {
+        // Return cached version if available
+        if (cachedResponse) {
+          return cachedResponse;
+        }
         
-        // Для навигационных запросов - особая логика
-        if (event.request.mode === 'navigate') {
-          return await handleNavigationRequest(event.request, cachedResponse);
-        }
-
-        // Для статических ресурсов - стратегия Cache First
-        if (isStaticAsset(event.request)) {
-          return await handleStaticAsset(event.request, cachedResponse);
-        }
-
-        // Для документов - стратегия Network First
-        if (isDocumentRequest(event.request)) {
-          return await handleDocumentRequest(event.request, cachedResponse);
-        }
-
-        // По умолчанию - Network First
-        return await handleDefaultRequest(event.request, cachedResponse);
-      } catch (error) {
-        console.log('Fetch failed:', error);
-        // Фолбэк для оффлайн-режима
-        const offlinePage = await caches.match('/offline.html');
-        return offlinePage || new Response('Оффлайн режим', {
-          status: 503,
-          statusText: 'Service Unavailable'
-        });
-      }
-    })()
+        // Otherwise fetch from network
+        return fetch(event.request)
+          .then((networkResponse) => {
+            // Cache successful requests (excluding Firebase APIs)
+            if (networkResponse.ok && 
+                !event.request.url.includes('firestore.googleapis.com') &&
+                !event.request.url.includes('firebaseio.com')) {
+              const responseClone = networkResponse.clone();
+              caches.open(STATIC_CACHE)
+                .then((cache) => {
+                  cache.put(event.request, responseClone);
+                });
+            }
+            return networkResponse;
+          })
+          .catch(() => {
+            // Fallback for navigation requests
+            if (event.request.mode === 'navigate') {
+              return caches.match('/offline.html');
+            }
+            return new Response('Offline');
+          });
+      })
   );
 });
-
-// Обработчики разных типов запросов
-async function handleNavigationRequest(request, cachedResponse) {
-  if (cachedResponse) {
-    return cachedResponse;
-  }
-  
-  try {
-    const networkResponse = await fetch(request);
-    if (networkResponse.ok) {
-      const cache = await caches.open(STATIC_CACHE);
-      await cache.put(request, networkResponse.clone());
-    }
-    return networkResponse;
-  } catch (error) {
-    // Возвращаем главную страницу для любых маршрутов в оффлайне
-    const fallback = await caches.match('/index.html');
-    return fallback || new Response('Оффлайн режим');
-  }
-}
-
-async function handleStaticAsset(request, cachedResponse) {
-  // Cache First для статических ресурсов
-  if (cachedResponse) {
-    return cachedResponse;
-  }
-  
-  try {
-    const networkResponse = await fetch(request);
-    if (networkResponse.ok) {
-      const cache = await caches.open(STATIC_CACHE);
-      await cache.put(request, networkResponse.clone());
-    }
-    return networkResponse;
-  } catch (error) {
-    throw error; // Пробрасываем ошибку для обработки в основном catch
-  }
-}
-
-async function handleDocumentRequest(request, cachedResponse) {
-  // Network First для документов (чтобы получать свежие версии)
-  try {
-    const networkResponse = await fetch(request);
-    if (networkResponse.ok) {
-      const cache = await caches.open(DYNAMIC_CACHE);
-      await cache.put(request, networkResponse.clone());
-    }
-    return networkResponse;
-  } catch (error) {
-    // В оффлайне возвращаем закэшированную версию
-    if (cachedResponse) {
-      return cachedResponse;
-    }
-    return new Response('Документ недоступен в оффлайн-режиме', {
-      status: 408,
-      headers: { 'Content-Type': 'text/plain' }
-    });
-  }
-}
-
-async function handleDefaultRequest(request, cachedResponse) {
-  // Stale-While-Revalidate для остальных запросов
-  try {
-    const networkResponse = await fetch(request);
-    if (networkResponse.ok) {
-      const cache = await caches.open(DYNAMIC_CACHE);
-      await cache.put(request, networkResponse.clone());
-    }
-    return networkResponse;
-  } catch (error) {
-    if (cachedResponse) {
-      return cachedResponse;
-    }
-    throw error;
-  }
-}
-
-// Вспомогательные функции для классификации запросов
-function isStaticAsset(request) {
-  return request.url.includes('/style.css') ||
-         request.url.includes('/app.js') ||
-         request.url.includes('/manifest.json') ||
-         request.url.match(/\.(css|js|json|png|jpg|svg)$/);
-}
-
-function isDocumentRequest(request) {
-  return request.url.match(/\.(pdf|doc|docx|xls|xlsx)$/) ||
-         request.url.includes('/documents/');
-}
