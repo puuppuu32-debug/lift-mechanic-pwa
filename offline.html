@@ -3,12 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Режим оффлайн - Электромеханик</title>
+    <title>Приложение доступно оффлайн - Электромеханик</title>
     <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
         body { 
-            font-family: Arial, sans-serif; 
+            font-family: 'Arial', sans-serif; 
             text-align: center; 
-            padding: 50px; 
+            padding: 20px; 
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             display: flex;
@@ -16,15 +22,65 @@
             justify-content: center;
             color: white;
         }
+        
         .offline-container {
             background: rgba(255, 255, 255, 0.1);
             backdrop-filter: blur(10px);
-            padding: 40px;
+            padding: 30px;
             border-radius: 15px;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-            max-width: 400px;
+            max-width: 500px;
+            width: 100%;
         }
-        .btn-primary {
+        
+        h1 {
+            font-size: 2rem;
+            margin-bottom: 20px;
+        }
+        
+        p {
+            margin-bottom: 15px;
+            line-height: 1.5;
+        }
+        
+        .features {
+            text-align: left;
+            margin: 25px 0;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 10px;
+        }
+        
+        .features h3 {
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        
+        .features ul {
+            list-style: none;
+        }
+        
+        .features li {
+            margin: 12px 0;
+            padding-left: 25px;
+            position: relative;
+        }
+        
+        .features li:before {
+            content: "✅";
+            position: absolute;
+            left: 0;
+        }
+        
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 20px;
+        }
+        
+        .btn {
             background: white;
             color: #667eea;
             border: none;
@@ -32,16 +88,112 @@
             border-radius: 8px;
             cursor: pointer;
             font-size: 16px;
+            text-decoration: none;
+            display: inline-block;
+            transition: transform 0.2s;
+            min-width: 160px;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+        
+        .connection-status {
             margin-top: 20px;
+            padding: 10px;
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.2);
+        }
+        
+        .offline-note {
+            margin-top: 15px;
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.8);
+        }
+        
+        @media (max-width: 480px) {
+            .offline-container {
+                padding: 20px;
+            }
+            
+            .btn-group {
+                flex-direction: column;
+            }
+            
+            .btn {
+                width: 100%;
+            }
         }
     </style>
 </head>
 <body>
     <div class="offline-container">
-        <h1>🔌 Оффлайн режим</h1>
-        <p>Приложение работает без подключения к интернету</p>
-        <p>Доступны базовые функции и закэшированные документы</p>
-        <button class="btn-primary" onclick="location.reload()">Обновить страницу</button>
+        <h1>📱 Режим оффлайн</h1>
+        <p>Приложение загружено и готово к работе без подключения к интернету</p>
+        
+        <div class="features">
+            <h3>Доступные функции:</h3>
+            <ul>
+                <li>Просмотр сохраненных заданий и заявок</li>
+                <li>Доступ к технической документации</li>
+                <li>Просмотр истории выполненных работ</li>
+                <li>Быстрый доступ к основным функциям</li>
+                <li>Работа с локальными данными</li>
+            </ul>
+        </div>
+        
+        <div class="btn-group">
+            <button class="btn" onclick="location.reload()">🔄 Обновить страницу</button>
+            <button class="btn" onclick="checkConnection()">📶 Проверить соединение</button>
+            <button class="btn" onclick="tryLoadApp()">🚀 Попробовать загрузить приложение</button>
+        </div>
+        
+        <div class="connection-status" id="connectionStatus">
+            🔴 Отсутствует подключение к интернету
+        </div>
+        
+        <div class="offline-note">
+            <p>Для полной функциональности требуется подключение к интернету</p>
+            <p>При появлении сети приложение автоматически обновится</p>
+        </div>
     </div>
+
+    <script>
+        // Проверка соединения
+        function checkConnection() {
+            const statusElement = document.getElementById('connectionStatus');
+            
+            if (navigator.onLine) {
+                statusElement.innerHTML = '🟢 Подключение к интернету восстановлено';
+                statusElement.style.background = 'rgba(0, 255, 0, 0.2)';
+                
+                // Автоперезагрузка через 2 секунды
+                setTimeout(() => {
+                    location.reload();
+                }, 2000);
+            } else {
+                statusElement.innerHTML = '🔴 Интернет все еще недоступен';
+                statusElement.style.background = 'rgba(255, 0, 0, 0.2)';
+            }
+        }
+        
+        // Попытка загрузить основное приложение
+        function tryLoadApp() {
+            window.location.href = '/index.html';
+        }
+        
+        // Автоматическая проверка при появлении сети
+        window.addEventListener('online', function() {
+            checkConnection();
+        });
+        
+        // Показываем текущий статус при загрузке
+        window.addEventListener('load', function() {
+            checkConnection();
+        });
+        
+        // Периодическая проверка соединения
+        setInterval(checkConnection, 10000);
+    </script>
 </body>
 </html>

@@ -1,12 +1,12 @@
-// app.js v2.6 - Fixed offline authentication
-console.log('App version 2.6 - Fixed offline authentication');
+// app.js v3.0 - Enhanced offline reliability
+console.log('App version 3.0 - Enhanced offline reliability');
 
 // Глобальные переменные
 let currentUser = null;
 let userDocuments = [];
 let db = null;
 let auth = null;
-let isOffline = !navigator.onLine; // Определяем статус сразу при загрузке
+let isOffline = !navigator.onLine;
 
 // Конфигурация Firebase
 const firebaseConfig = {
@@ -19,73 +19,96 @@ const firebaseConfig = {
     measurementId: "G-T5J495YEL8"
 };
 
-// ==================== ФУНКЦИИ ДЛЯ ОФФЛАЙН-АУТЕНТИФИКАЦИИ ====================
+// ==================== УЛУЧШЕННЫЕ ФУНКЦИИ ДЛЯ ОФФЛАЙН-РАБОТЫ ====================
 
+// Сохранение состояния аутентификации
 function saveAuthState(user) {
-    if (user) {
-        localStorage.setItem('offlineAuth', JSON.stringify({
-            email: user.email,
-            uid: user.uid,
-            timestamp: Date.now()
-        }));
-    } else {
-        localStorage.removeItem('offlineAuth');
+    try {
+        if (user) {
+            localStorage.setItem('offlineAuth', JSON.stringify({
+                email: user.email,
+                uid: user.uid,
+                timestamp: Date.now()
+            }));
+            console.log('Auth state saved for offline use');
+        } else {
+            localStorage.removeItem('offlineAuth');
+        }
+    } catch (error) {
+        console.warn('Failed to save auth state:', error);
     }
 }
 
+// Загрузка оффлайн-аутентификации
 function loadOfflineAuth() {
-    const savedAuth = localStorage.getItem('offlineAuth');
-    if (savedAuth) {
-        try {
+    try {
+        const savedAuth = localStorage.getItem('offlineAuth');
+        if (savedAuth) {
             const authData = JSON.parse(savedAuth);
-            // Проверяем, не устарели ли данные (например, старше 7 дней)
+            // Проверяем срок действия (7 дней)
             const isExpired = Date.now() - authData.timestamp > 7 * 24 * 60 * 60 * 1000;
             if (!isExpired) {
                 return authData;
             } else {
                 localStorage.removeItem('offlineAuth');
             }
-        } catch (e) {
-            console.warn('Failed to parse offline auth data');
-            localStorage.removeItem('offlineAuth');
         }
+    } catch (error) {
+        console.warn('Failed to load offline auth:', error);
+        localStorage.removeItem('offlineAuth');
     }
     return null;
 }
 
+// Восстановление оффлайн-сессии
 function restoreOfflineSession() {
-    const offlineAuth = loadOfflineAuth();
-    if (offlineAuth && isOffline) {
-        console.log('Restoring offline session for:', offlineAuth.email);
-        
-        // Создаем mock-объект пользователя для оффлайн-режима
-        const mockUser = {
-            email: offlineAuth.email,
-            uid: offlineAuth.uid,
-            isOffline: true
-        };
-        
-        currentUser = mockUser;
-        document.getElementById('userEmail').textContent = offlineAuth.email + ' (Оффлайн)';
-        showMainMenu();
-        loadCachedData();
-        showNotification('📱 Восстановлена оффлайн-сессия');
-        return true;
+    try {
+        const offlineAuth = loadOfflineAuth();
+        if (offlineAuth && isOffline) {
+            console.log('Restoring offline session for:', offlineAuth.email);
+            
+            // Создаем mock-объект пользователя
+            const mockUser = {
+                email: offlineAuth.email,
+                uid: offlineAuth.uid,
+                isOffline: true
+            };
+            
+            currentUser = mockUser;
+            
+            // Обновляем интерфейс
+            const userEmailElement = document.getElementById('userEmail');
+            if (userEmailElement) {
+                userEmailElement.textContent = offlineAuth.email + ' (Оффлайн)';
+            }
+            
+            showMainMenu();
+            loadCachedData();
+            showNotification('📱 Восстановлена оффлайн-сессия');
+            return true;
+        }
+    } catch (error) {
+        console.error('Error restoring offline session:', error);
     }
     return false;
 }
 
+// Загрузка кэшированных данных
 function loadCachedData() {
     console.log('Loading cached data for offline mode...');
-    loadCachedTasks();
-    loadCachedDocuments();
-    
-    // Обновляем статус синхронизации
-    const syncStatus = document.getElementById('syncStatus');
-    if (syncStatus) {
-        syncStatus.textContent = '🔴 Оффлайн - локальные данные';
-        syncStatus.style.background = '#fff3cd';
-        syncStatus.style.color = '#856404';
+    try {
+        loadCachedTasks();
+        loadCachedDocuments();
+        
+        // Обновляем статус синхронизации
+        const syncStatus = document.getElementById('syncStatus');
+        if (syncStatus) {
+            syncStatus.textContent = '🔴 Оффлайн - локальные данные';
+            syncStatus.style.background = '#fff3cd';
+            syncStatus.style.color = '#856404';
+        }
+    } catch (error) {
+        console.error('Error loading cached data:', error);
     }
 }
 
@@ -93,7 +116,10 @@ function loadCachedData() {
 
 // Глобальная функция инициализации
 window.initApp = function() {
-    console.log('Initializing Firebase application...');
+    console.log('Initializing Firebase application with enhanced offline support...');
+    
+    // Показываем что приложение загружается
+    showNotification('🔄 Загрузка приложения...');
     
     // Сначала пытаемся восстановить оффлайн-сессию
     if (isOffline) {
@@ -101,7 +127,8 @@ window.initApp = function() {
         if (restoreOfflineSession()) {
             console.log('Offline session restored successfully');
             setupEventListeners();
-            return; // Прерываем инициализацию Firebase в оффлайне
+            showNotification('✅ Приложение готово к работе в оффлайн-режиме');
+            return;
         }
     }
     
@@ -124,21 +151,28 @@ window.initApp = function() {
         initAuthListener();
         setupEventListeners();
         
+        showNotification('✅ Приложение успешно загружено');
+        
     } catch (error) {
         console.error('❌ Firebase initialization failed:', error);
-        showNotification('Приложение загружено в ограниченном режиме');
         
-        // Пытаемся восстановить оффлайн-сессию при ошибке инициализации
+        // Пытаемся восстановить оффлайн-сессию при ошибке
         if (!restoreOfflineSession()) {
+            showNotification('⚠️ Приложение загружено в ограниченном режиме');
             setupBasicEventListeners();
+            
+            // Показываем базовый интерфейс
+            const loginScreen = document.getElementById('loginScreen');
+            const mainMenu = document.getElementById('mainMenu');
+            if (loginScreen) loginScreen.classList.add('active');
         }
     }
 };
 
+// Инициализация слушателя аутентификации
 function initAuthListener() {
     if (!auth) {
-        console.warn('Auth not available, skipping auth listener');
-        // Пытаемся восстановить оффлайн-сессию
+        console.warn('Auth not available, attempting offline restoration');
         if (!restoreOfflineSession()) {
             showLoginScreen();
         }
@@ -151,10 +185,10 @@ function initAuthListener() {
         if (user) {
             currentUser = user;
             
-            // Сохраняем состояние аутентификации для оффлайн использования
+            // Сохраняем состояние для оффлайн использования
             saveAuthState(user);
             
-            // Обновляем email в интерфейсе
+            // Обновляем интерфейс
             document.getElementById('userEmail').textContent = user.email;
             
             showMainMenu();
@@ -178,7 +212,7 @@ function initAuthListener() {
         }
     });
     
-    // Если мы уже в оффлайн-режиме, пытаемся восстановить сессию сразу
+    // Дополнительная проверка для оффлайн-режима
     if (isOffline && !currentUser) {
         setTimeout(() => {
             if (!currentUser && !restoreOfflineSession()) {
@@ -190,104 +224,127 @@ function initAuthListener() {
 
 // Базовая настройка обработчиков (без Firebase)
 function setupBasicEventListeners() {
-    console.log('Setting up basic event listeners');
+    console.log('Setting up basic event listeners for offline mode');
     
-    // Закрытие модальных окон
-    document.querySelectorAll('.close').forEach(closeBtn => {
-        closeBtn.addEventListener('click', closeModals);
-    });
-    
-    // Закрытие по клику вне окна
-    window.addEventListener('click', function(e) {
-        if (e.target.classList.contains('modal')) {
-            closeModals();
-        }
-    });
-    
-    // Обработчики для оффлайн функционала
-    setupOfflineFunctionality();
+    try {
+        // Закрытие модальных окон
+        document.querySelectorAll('.close').forEach(closeBtn => {
+            closeBtn.addEventListener('click', closeModals);
+        });
+        
+        // Закрытие по клику вне окна
+        window.addEventListener('click', function(e) {
+            if (e.target.classList.contains('modal')) {
+                closeModals();
+            }
+        });
+        
+        // Обработчики для оффлайн функционала
+        setupOfflineFunctionality();
+        
+        // Показываем уведомление о ограниченном режиме
+        showNotification('🔌 Оффлайн режим - базовые функции');
+        
+    } catch (error) {
+        console.error('Error setting up basic event listeners:', error);
+    }
 }
 
 // Настройка оффлайн функционала
 function setupOfflineFunctionality() {
-    // Показываем уведомление, что функционал ограничен
-    const menuItems = document.querySelectorAll('.menu-item');
-    menuItems.forEach(item => {
-        item.addEventListener('click', function() {
-            if (isOffline) {
-                const menuText = this.querySelector('h3').textContent;
-                if (menuText.includes('Задания')) {
-                    showModal('tasksModal');
-                    loadCachedTasks();
-                } else if (menuText.includes('Литература')) {
-                    showModal('literatureModal');
-                    loadCachedDocuments();
+    try {
+        const menuItems = document.querySelectorAll('.menu-item');
+        menuItems.forEach(item => {
+            item.addEventListener('click', function() {
+                if (isOffline) {
+                    const menuText = this.querySelector('h3').textContent;
+                    if (menuText.includes('Задания')) {
+                        showModal('tasksModal');
+                        loadCachedTasks();
+                    } else if (menuText.includes('Литература')) {
+                        showModal('literatureModal');
+                        loadCachedDocuments();
+                    }
                 }
-            } else {
-                // Обычная логика для онлайн режима
-                if (this.id === 'tasksBtn') {
-                    showModal('tasksModal');
-                    loadTasks();
-                } else if (this.id === 'literatureBtn') {
-                    showModal('literatureModal');
-                }
-            }
+            });
         });
-    });
+    } catch (error) {
+        console.error('Error setting up offline functionality:', error);
+    }
 }
 
 // Основная настройка обработчиков событий
 function setupEventListeners() {
-    // Форма входа
-    document.getElementById('loginForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-        handleLogin();
-    });
-    
-    // Кнопка регистрации
-    document.getElementById('registerBtn').addEventListener('click', function() {
-        handleRegister();
-    });
-    
-    // Кнопка выхода
-    document.getElementById('logoutBtn').addEventListener('click', handleLogout);
-    
-    // Кнопки меню
-    document.getElementById('tasksBtn').addEventListener('click', function() {
-        showModal('tasksModal');
-        if (isOffline) {
-            loadCachedTasks();
-        } else {
-            loadTasks();
+    try {
+        // Форма входа
+        const loginForm = document.getElementById('loginForm');
+        if (loginForm) {
+            loginForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                handleLogin();
+            });
         }
-    });
-    
-    document.getElementById('literatureBtn').addEventListener('click', function() {
-        showModal('literatureModal');
-        if (isOffline) {
-            loadCachedDocuments();
+        
+        // Кнопка регистрации
+        const registerBtn = document.getElementById('registerBtn');
+        if (registerBtn) {
+            registerBtn.addEventListener('click', function() {
+                handleRegister();
+            });
         }
-    });
-    
-    // Закрытие модальных окон
-    document.querySelectorAll('.close').forEach(closeBtn => {
-        closeBtn.addEventListener('click', closeModals);
-    });
-    
-    // Закрытие по клику вне окна
-    window.addEventListener('click', function(e) {
-        if (e.target.classList.contains('modal')) {
-            closeModals();
+        
+        // Кнопка выхода
+        const logoutBtn = document.getElementById('logoutBtn');
+        if (logoutBtn) {
+            logoutBtn.addEventListener('click', handleLogout);
         }
-    });
-    
-    // Инициализация функциональности
-    setupTasksFunctionality();
-    setupLiteratureFunctionality();
-    setupOfflineFunctionality();
+        
+        // Кнопки меню
+        const tasksBtn = document.getElementById('tasksBtn');
+        if (tasksBtn) {
+            tasksBtn.addEventListener('click', function() {
+                showModal('tasksModal');
+                if (isOffline) {
+                    loadCachedTasks();
+                } else {
+                    loadTasks();
+                }
+            });
+        }
+        
+        const literatureBtn = document.getElementById('literatureBtn');
+        if (literatureBtn) {
+            literatureBtn.addEventListener('click', function() {
+                showModal('literatureModal');
+                if (isOffline) {
+                    loadCachedDocuments();
+                }
+            });
+        }
+        
+        // Закрытие модальных окон
+        document.querySelectorAll('.close').forEach(closeBtn => {
+            closeBtn.addEventListener('click', closeModals);
+        });
+        
+        // Закрытие по клику вне окна
+        window.addEventListener('click', function(e) {
+            if (e.target.classList.contains('modal')) {
+                closeModals();
+            }
+        });
+        
+        // Инициализация функциональности
+        setupTasksFunctionality();
+        setupLiteratureFunctionality();
+        setupOfflineFunctionality();
+        
+    } catch (error) {
+        console.error('Error setting up event listeners:', error);
+    }
 }
 
-// Проверка доступности Firebase перед использованием
+// Проверка доступности Firebase
 function checkFirebase() {
     if ((!db || !auth) && !isOffline) {
         console.error('Firebase not initialized');
@@ -299,8 +356,7 @@ function checkFirebase() {
     
     if (isOffline) {
         if (currentUser && currentUser.isOffline) {
-            // Разрешаем просмотр данных в оффлайн-режиме
-            return false; // Но возвращаем false чтобы показать что Firebase недоступен
+            return false; // Разрешаем просмотр в оффлайн-режиме
         } else {
             showNotification('🔌 Оффлайн режим - требуется аутентификация');
             return false;
@@ -920,135 +976,171 @@ function getFilterText(filter) {
     return filterMap[filter] || 'Все';
 }
 
-// Уведомления
+// Улучшенные уведомления с обработкой ошибок
 function showNotification(message) {
-    const existingNotification = document.querySelector('.custom-notification');
-    if (existingNotification) {
-        existingNotification.remove();
-    }
-    
-    const notification = document.createElement('div');
-    notification.className = 'custom-notification';
-    notification.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        background: #27ae60;
-        color: white;
-        padding: 15px 20px;
-        border-radius: 5px;
-        z-index: 10000;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        transform: translateX(100%);
-        transition: transform 0.3s ease;
-        max-width: 300px;
-        word-wrap: break-word;
-    `;
-    notification.textContent = message;
-    
-    document.body.appendChild(notification);
-    
-    setTimeout(() => notification.style.transform = 'translateX(0)', 100);
-    setTimeout(() => {
-        notification.style.transform = 'translateX(100%)';
+    try {
+        // Удаляем существующие уведомления
+        const existingNotification = document.querySelector('.custom-notification');
+        if (existingNotification) {
+            existingNotification.remove();
+        }
+        
+        // Создаем новое уведомление
+        const notification = document.createElement('div');
+        notification.className = 'custom-notification';
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #27ae60;
+            color: white;
+            padding: 15px 20px;
+            border-radius: 5px;
+            z-index: 10000;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+            max-width: 300px;
+            word-wrap: break-word;
+        `;
+        notification.textContent = message;
+        
+        document.body.appendChild(notification);
+        
+        // Анимация появления
+        setTimeout(() => notification.style.transform = 'translateX(0)', 100);
+        
+        // Автоматическое скрытие
         setTimeout(() => {
-            if (notification.parentNode) {
-                notification.parentNode.removeChild(notification);
-            }
-        }, 300);
-    }, 3000);
+            notification.style.transform = 'translateX(100%)';
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.parentNode.removeChild(notification);
+                }
+            }, 300);
+        }, 3000);
+        
+    } catch (error) {
+        console.error('Error showing notification:', error);
+    }
 }
 
+// Улучшенное управление экранами
 function showLoginScreen() {
-    document.getElementById('mainMenu').classList.remove('active');
-    document.getElementById('loginScreen').classList.add('active');
-    
-    const loginForm = document.getElementById('loginForm');
-    if (loginForm) {
-        loginForm.reset();
+    try {
+        const mainMenu = document.getElementById('mainMenu');
+        const loginScreen = document.getElementById('loginScreen');
+        
+        if (mainMenu) mainMenu.classList.remove('active');
+        if (loginScreen) loginScreen.classList.add('active');
+        
+        const loginForm = document.getElementById('loginForm');
+        if (loginForm) {
+            loginForm.reset();
+        }
+        
+        const authStatus = document.getElementById('authStatus');
+        if (authStatus) {
+            authStatus.textContent = '';
+        }
+    } catch (error) {
+        console.error('Error showing login screen:', error);
     }
-    document.getElementById('authStatus').textContent = '';
 }
 
 function showMainMenu() {
-    document.getElementById('loginScreen').classList.remove('active');
-    document.getElementById('mainMenu').classList.add('active');
-}
-
-function showModal(modalId) {
-    const modal = document.getElementById(modalId);
-    if (modal) {
-        modal.style.display = 'block';
+    try {
+        const loginScreen = document.getElementById('loginScreen');
+        const mainMenu = document.getElementById('mainMenu');
+        
+        if (loginScreen) loginScreen.classList.remove('active');
+        if (mainMenu) mainMenu.classList.add('active');
+    } catch (error) {
+        console.error('Error showing main menu:', error);
     }
 }
 
-function closeModal(modalId) {
-    const modal = document.getElementById(modalId);
-    if (modal) {
-        modal.style.display = 'none';
+// Улучшенное управление модальными окнами
+function showModal(modalId) {
+    try {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            modal.style.display = 'block';
+        }
+    } catch (error) {
+        console.error('Error showing modal:', error);
     }
 }
 
 function closeModals() {
-    document.querySelectorAll('.modal').forEach(modal => {
-        modal.style.display = 'none';
-    });
+    try {
+        document.querySelectorAll('.modal').forEach(modal => {
+            modal.style.display = 'none';
+        });
+    } catch (error) {
+        console.error('Error closing modals:', error);
+    }
 }
 
-function updateOnlineStatus(isOnline) {
-    isOffline = !isOnline;
+// Обновление статуса онлайн/оффлайн
+function updateOnlineStatus(online) {
+    isOffline = !online;
     const statusElement = document.getElementById('syncStatus');
     
     if (statusElement) {
-        if (isOnline) {
-            statusElement.innerHTML = '🟢 Онлайн';
+        if (online) {
+            statusElement.textContent = '🟢 Онлайн';
             statusElement.style.background = '#d4edda';
             statusElement.style.color = '#155724';
         } else {
-            statusElement.innerHTML = '🔴 Оффлайн - локальные данные';
+            statusElement.textContent = '🔴 Оффлайн - локальные данные';
             statusElement.style.background = '#fff3cd';
             statusElement.style.color = '#856404';
         }
     }
     
-    // Если перешли в онлайн и есть оффлайн-пользователь, пытаемся синхронизироваться
-    if (isOnline && currentUser && currentUser.isOffline) {
+    // Синхронизация при переходе в онлайн
+    if (online && currentUser && currentUser.isOffline) {
         showNotification('🔄 Синхронизация данных...');
         // Здесь можно добавить логику синхронизации
     }
 }
 
-// ==================== PWA ФУНКЦИОНАЛЬНОСТЬ ====================
+// ==================== PWA И СЕТЕВЫЕ ФУНКЦИИ ====================
 
+// Регистрация Service Worker с улучшенной обработкой
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', function() {
         navigator.serviceWorker.register('/sw.js')
             .then(function(registration) {
                 console.log('ServiceWorker зарегистрирован успешно: ', registration.scope);
+                
+                // Отслеживание обновлений Service Worker
+                registration.addEventListener('updatefound', () => {
+                    const newWorker = registration.installing;
+                    console.log('New Service Worker found:', newWorker);
+                });
             })
             .catch(function(error) {
                 console.log('Ошибка регистрации ServiceWorker: ', error);
             });
 
+        // Отслеживание изменений сети
         window.addEventListener('online', function() {
             console.log('Соединение восстановлено');
             isOffline = false;
             showNotification('✅ Соединение восстановлено');
-            
-            // Если есть оффлайн-пользователь, переключаем на онлайн-режим
-            if (currentUser && currentUser.isOffline) {
-                // Здесь можно добавить логику для перезагрузки реальных данных
-                showNotification('🔄 Синхронизация с сервером...');
-            }
-            
-            if (currentUser) {
-                loadUserDocuments();
-                // Автоматически обновляем задания если открыто модальное окно
-                if (document.getElementById('tasksModal').style.display === 'block') {
-                    setTimeout(() => loadTasks(), 1000);
-                }
-            }
             updateOnlineStatus(true);
+            
+            // Перезагрузка данных при восстановлении связи
+            if (currentUser && !currentUser.isOffline) {
+                setTimeout(() => {
+                    loadUserDocuments();
+                    if (document.getElementById('tasksModal').style.display === 'block') {
+                        loadTasks();
+                    }
+                }, 1000);
+            }
         });
 
         window.addEventListener('offline', function() {
@@ -1060,24 +1152,29 @@ if ('serviceWorker' in navigator) {
     });
 }
 
-// ==================== УТИЛИТЫ ДЛЯ ОТЛАДКИ ====================
+// ==================== ГЛОБАЛЬНЫЕ ФУНКЦИИ ДЛЯ ОТЛАДКИ ====================
 
 window.clearAppData = function() {
     if (confirm('Очистить все данные приложения?')) {
-        localStorage.clear();
-        if (auth) auth.signOut();
-        showNotification('Все данные очищены');
-        setTimeout(() => location.reload(), 1000);
+        try {
+            localStorage.clear();
+            if (auth) auth.signOut();
+            showNotification('Все данные очищены');
+            setTimeout(() => location.reload(), 1000);
+        } catch (error) {
+            console.error('Error clearing app data:', error);
+        }
     }
 };
 
-window.getAuthStatus = function() {
+window.getAppStatus = function() {
     return {
         currentUser: currentUser,
         isLoggedIn: !!currentUser,
         userDocuments: userDocuments,
         firebaseReady: !!(db && auth),
-        isOffline: isOffline
+        isOffline: isOffline,
+        serviceWorker: 'serviceWorker' in navigator ? 'available' : 'not available'
     };
 };
 
@@ -1113,4 +1210,14 @@ window.addTestTask = function() {
         });
 };
 
-console.log('Приложение v2.6 инициализировано с исправленной оффлайн-аутентификацией');
+// Глобальный обработчик ошибок
+window.addEventListener('error', function(e) {
+    console.error('Global error caught:', e);
+    
+    // Показываем пользователю friendly сообщение
+    if (e.error && e.error.message && e.error.message.includes('Loading')) {
+        showNotification('⚠️ Ошибка загрузки ресурсов');
+    }
+});
+
+console.log('App v3.0 initialized with enhanced offline reliability');
