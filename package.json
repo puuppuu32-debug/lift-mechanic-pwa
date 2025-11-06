@@ -1,24 +1,6 @@
 {
-  "name": "lift-mechanic-pwa",
-  "version": "3.0.0",
-  "description": "PWA приложение для электромехаников по лифтам с улучшенной оффлайн-работой",
-  "main": "index.html",
-  "scripts": {
-    "start": "npx serve -s .",
-    "build": "echo 'No build process needed for static PWA'",
-    "deploy": "echo 'Deploy to Vercel or other static host'"
-  },
   "dependencies": {
     "firebase": "^12.5.0",
     "firebase-admin": "^13.5.0"
-  },
-  "keywords": [
-    "pwa",
-    "offline",
-    "lift-mechanic",
-    "service-worker",
-    "firebase"
-  ],
-  "author": "Your Name",
-  "license": "MIT"
+  }
 }
